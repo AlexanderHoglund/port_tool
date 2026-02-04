@@ -1,45 +1,60 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 
+const VALID_EQUIPMENT_KEYS = [
+  'sts_crane', 'rtg_crane', 'rmg_crane', 'asc',
+  'straddle_carrier', 'agv', 'reach_stacker', 'ech',
+  'terminal_tractor', 'high_bay_storage', 'mobile_harbor_crane', 'portal_crane',
+]
+
 export async function POST(request: Request) {
   try {
     const { quantities } = await request.json()
 
-    const categoryKeys = ['electric_tractor', 'ammonia_bunkering', 'shore_power', 'crane_electrification']
+    // Validate: quantities is a Record<string, number> with equipment keys
+    if (!quantities || typeof quantities !== 'object') {
+      return NextResponse.json({ error: 'Missing quantities object' }, { status: 400 })
+    }
 
-    for (const key of categoryKeys) {
-      if (quantities[key] === undefined || quantities[key] < 0) {
-        return NextResponse.json({ error: `Invalid quantity for ${key}` }, { status: 400 })
+    // Filter to only valid keys with qty > 0
+    const requested: { key: string; qty: number }[] = []
+    for (const key of VALID_EQUIPMENT_KEYS) {
+      const qty = quantities[key]
+      if (qty !== undefined && qty !== null && qty > 0) {
+        if (typeof qty !== 'number' || qty < 0) {
+          return NextResponse.json({ error: `Invalid quantity for ${key}` }, { status: 400 })
+        }
+        requested.push({ key, qty })
       }
     }
 
-    const hasAny = categoryKeys.some(k => quantities[k] > 0)
-    if (!hasAny) {
-      return NextResponse.json({ error: 'At least one category must have a quantity greater than 0' }, { status: 400 })
+    if (requested.length === 0) {
+      return NextResponse.json(
+        { error: 'At least one equipment type must have a quantity greater than 0' },
+        { status: 400 }
+      )
     }
 
     const supabase = await createClient()
 
     const { data: assumptions, error } = await supabase
-      .from('energy_transition_assumptions')
+      .from('equipment_electrification_assumptions')
       .select('*')
+      .in('equipment_key', requested.map(r => r.key))
 
     if (error || !assumptions || assumptions.length === 0) {
       return NextResponse.json({ error: 'Failed to load assumptions data' }, { status: 500 })
     }
 
-    const categories = []
+    const equipmentResults = []
     let grandTotalCapex = 0
     let grandTotalAnnualOpex = 0
     let grandTotalAnnualEnergyCost = 0
     let grandTotalAnnualCo2Savings = 0
     let grandTotalAnnualDieselSavings = 0
 
-    for (const key of categoryKeys) {
-      const qty = quantities[key]
-      if (qty === 0) continue
-
-      const assumption = assumptions.find((a: any) => a.category_key === key)
+    for (const { key, qty } of requested) {
+      const assumption = assumptions.find((a: any) => a.equipment_key === key)
       if (!assumption) continue
 
       const unitCapex = parseFloat(assumption.unit_capex_usd)
@@ -71,9 +86,10 @@ export async function POST(request: Request) {
       grandTotalAnnualCo2Savings += totalAnnualCo2
       grandTotalAnnualDieselSavings += totalAnnualDieselUsd
 
-      categories.push({
-        category_key: key,
+      equipmentResults.push({
+        equipment_key: key,
         display_name: assumption.display_name,
+        equipment_type: assumption.equipment_type,
         unit_label: assumption.unit_label,
         quantity: qty,
         unit_capex_usd: unitCapex + installCost,
@@ -98,7 +114,7 @@ export async function POST(request: Request) {
         total_annual_co2_savings_tons: grandTotalAnnualCo2Savings,
         total_annual_diesel_savings_usd: grandTotalAnnualDieselSavings,
       },
-      categories,
+      equipment: equipmentResults,
       inputs: quantities,
     })
   } catch (error: any) {
