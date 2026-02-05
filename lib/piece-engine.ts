@@ -65,9 +65,13 @@ function buildEconomicMap(
 /**
  * Calculate equipment energy/emissions using PIECE throughput method
  *
- * PIECE Formula:
+ * PIECE Formula (for most equipment):
  *   annual_kwh = (kwh_per_teu × annual_teu) / teu_ratio × quantity
  *   annual_diesel_L = (liters_per_teu × annual_teu) / teu_ratio × quantity
+ *
+ * REEFER EXCEPTION: Uses capacity-based formula instead:
+ *   annual_kwh = quantity × peak_power_kw × utilization_hours_per_year
+ *   (Reefers provide constant power to refrigerated containers, not per-move energy)
  *
  * CRITICAL: Equipment category determines energy source:
  *   - grid_powered (STS, RMG, RTG, ASC, MHC, Reefer): electricity in BOTH baseline AND scenario
@@ -96,6 +100,11 @@ export function calculateEquipmentPiece(
   const dieselEfWtw = economicMap['diesel_ef_wtw'] ?? 3.29 // kgCO2e/L WTW
   const gridEf = economicMap['grid_ef'] ?? 0 // kgCO2/kWh (0 = 100% green)
   const maintenanceSaving = economicMap['maintenance_saving'] ?? 0.25
+  const utilizationFactor = economicMap['utilization_factor'] ?? 0.85 // For capacity-based equipment
+
+  // Reefer utilization is typically lower (containers come and go)
+  const reeferUtilization = economicMap['reefer_utilization'] ?? 0.55
+  const hoursPerYear = 8760
 
   const lineItems: PieceEquipmentLineItem[] = []
   let totalDiesel = 0
@@ -110,10 +119,22 @@ export function calculateEquipmentPiece(
     const meta = pieceEquipment.find((e) => e.equipment_key === equipmentKey)
     if (!meta) continue
 
-    // PIECE throughput formula
-    // TEU ratio: how many TEU moves one unit handles (e.g., STS=1, RTG=4, TT=8)
-    const annualKwhPotential = (meta.kwh_per_teu * annualTeu) / meta.teu_ratio * quantity
-    const annualDieselPotential = (meta.liters_per_teu * annualTeu) / meta.teu_ratio * quantity
+    // Determine calculation method based on equipment type
+    // REEFER: Uses capacity-based formula (power × utilization × hours)
+    // OTHERS: Use throughput-based formula (kWh/TEU × TEU / ratio)
+    let annualKwhPotential: number
+    let annualDieselPotential: number
+
+    if (equipmentKey === 'reefer') {
+      // Reefer capacity-based: plugs × power × utilization × hours
+      annualKwhPotential = quantity * meta.peak_power_kw * reeferUtilization * hoursPerYear
+      annualDieselPotential = 0 // Reefers are always electric
+    } else {
+      // Standard throughput-based formula
+      // TEU ratio: how many TEU moves one unit handles (e.g., STS=1, RTG=4, TT=8)
+      annualKwhPotential = (meta.kwh_per_teu * annualTeu) / meta.teu_ratio * quantity
+      annualDieselPotential = (meta.liters_per_teu * annualTeu) / meta.teu_ratio * quantity
+    }
 
     // CRITICAL: Determine energy source based on equipment category
     // Grid-powered: ALWAYS uses electricity (both baseline and scenario)
@@ -308,10 +329,18 @@ export function calculateBerthInfrastructure(
   const electricityPrice = economicMap['electricity_price'] ?? 0.12
   const dieselEfWtw = economicMap['diesel_ef_wtw'] ?? 3.29
   const gridEf = economicMap['grid_ef'] ?? 0
+  const dieselEnergyDensity = economicMap['diesel_energy_density'] ?? 9.7 // kWh/L
+  const engineEfficiency = economicMap['engine_efficiency'] ?? 0.45 // diesel engine efficiency
 
   // Vessel fuel consumption at berth (from PIECE data)
   // This is per-hour fuel consumption for auxiliary engines
   const vesselFuelPerHour = economicMap['vessel_fuel_l_per_hour'] ?? 200
+
+  // Calculate diesel-to-electric conversion factor
+  // Shore power should match the USEFUL work from diesel, not the raw energy
+  // 1L diesel → dieselEnergyDensity kWh energy → engineEfficiency useful work
+  // Electric motors are ~95% efficient, so shore power needed ≈ useful work / 0.95
+  const dieselToElectricKwhPerL = dieselEnergyDensity * engineEfficiency / 0.95
 
   const lineItems: PieceBerthLineItem[] = []
   let totalOpsCapex = 0
@@ -358,8 +387,10 @@ export function calculateBerthInfrastructure(
     let scenarioEnergyCost = 0
 
     if (berth.ops_enabled) {
-      // All shore power (100% OPS)
-      scenarioShorePowerKwh = annualBerthHours * opsPowerMw * 1000 // MW → kW
+      // Shore power replaces vessel auxiliary diesel consumption
+      // Calculate kWh equivalent to the diesel that would be burned
+      // This ensures proper cost comparison: diesel cost vs electricity cost for SAME work
+      scenarioShorePowerKwh = baselineDieselL * dieselToElectricKwhPerL
       scenarioCo2Tons = (scenarioShorePowerKwh * gridEf) / 1000
       scenarioEnergyCost = scenarioShorePowerKwh * electricityPrice
     } else {
