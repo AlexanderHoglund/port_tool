@@ -8,6 +8,20 @@ export type PortConfig = {
   size_key: '' | 'small_feeder' | 'regional' | 'hub' | 'mega_hub'
 }
 
+// ── PIECE Terminal Types ─────────────────────────────────────
+export type TerminalType = 'container' | 'cruise' | 'roro' | 'port_services'
+
+export type BerthConfig = {
+  id: string
+  berth_number: number
+  berth_name: string
+  vessel_segment_key: string   // e.g., 'container_6_10k', 'cruise_100_175k'
+  annual_calls: number
+  avg_berth_hours: number
+  ops_enabled: boolean         // OPS shore power infrastructure
+  dc_enabled: boolean          // DC fast charging for electric vessels
+}
+
 export type VesselCallConfig = {
   vessel_type: string
   annual_calls: number
@@ -39,6 +53,41 @@ export type TerminalConfig = {
   cargo_type: 'container'
   onshore: OnshoreConfig
   offshore: OffshoreConfig
+}
+
+// ── PIECE Terminal Config (new structure) ─────────────────────
+export type PieceTerminalConfig = {
+  id: string
+  name: string
+  terminal_type: TerminalType
+
+  // Throughput
+  annual_teu: number              // For container
+  annual_passengers?: number      // For cruise
+  annual_ceu?: number             // For RoRo (Car Equivalent Units)
+
+  // Berths (NEW - berth-by-berth OPS/DC config)
+  berths: BerthConfig[]
+
+  // Equipment (baseline = diesel, scenario = electric)
+  baseline_equipment: Record<string, number>
+  scenario_equipment: Record<string, number>
+
+  // Charger overrides (auto-calculated from equipment, but can be manually adjusted)
+  charger_overrides?: Record<string, number>
+
+  // Grid infrastructure
+  cable_length_m?: number         // Total cable run in meters
+
+  // Service boats (for port_services type)
+  tugs?: { diesel_count: number; electric_count: number }
+  pilot_boats?: { diesel_count: number; electric_count: number }
+}
+
+export type PieceCalculationRequest = {
+  port: PortConfig
+  terminals: PieceTerminalConfig[]
+  economic_overrides?: Record<string, number>  // Override PIECE defaults
 }
 
 export type CalculationRequest = {
@@ -227,6 +276,73 @@ export type EmissionFactorRow = {
   source: string | null
 }
 
+// ── PIECE Database Row Types ─────────────────────────────────
+
+export type PieceEquipmentRow = {
+  id: string
+  equipment_key: string
+  display_name: string
+  equipment_category: 'grid_powered' | 'battery_powered'
+  equipment_type: 'quayside' | 'yard' | 'horizontal'
+  terminal_type_key: TerminalType
+  capex_usd: number
+  annual_opex_usd: number
+  peak_power_kw: number
+  kwh_per_teu: number
+  liters_per_teu: number
+  teu_ratio: number
+  lifespan_years: number
+  created_at?: string
+}
+
+export type PieceEvseRow = {
+  id: string
+  evse_key: string
+  equipment_key: string
+  display_name: string
+  capex_usd: number
+  annual_opex_usd: number
+  power_kw: number
+  units_per_charger: number
+  created_at?: string
+}
+
+export type PieceFleetOpsRow = {
+  id: string
+  vessel_segment_key: string
+  terminal_type_key: TerminalType
+  display_name: string
+  ops_power_mw: number
+  transformer_capex_usd: number
+  converter_capex_usd: number
+  civil_works_capex_usd: number
+  annual_opex_usd: number
+  typical_berth_hours: number
+  tugs_per_call: number
+  created_at?: string
+}
+
+export type PieceGridRow = {
+  id: string
+  component_key: string
+  display_name: string
+  cost_per_mw: number | null
+  cost_per_meter: number | null
+  voltage_kv: number
+  simultaneity_factor: number
+  created_at?: string
+}
+
+export type EconomicAssumptionRow = {
+  id: string
+  assumption_key: string
+  display_name: string
+  value: number
+  unit: string
+  source: string | null
+  created_at?: string
+}
+
 export type AllAssumptions = {
   benchmarks: ThroughputBenchmarkRow[]
   dieselEquipment: DieselAssumptionRow[]
@@ -234,4 +350,203 @@ export type AllAssumptions = {
   vesselBerth: VesselBerthRow[]
   tugboat: TugboatAssumptionRow[]
   emissionFactors: EmissionFactorRow[]
+}
+
+// ── PIECE Assumptions (all data from PIECE tables) ─────────────
+export type PieceAssumptions = {
+  equipment: PieceEquipmentRow[]
+  evse: PieceEvseRow[]
+  fleetOps: PieceFleetOpsRow[]
+  grid: PieceGridRow[]
+  economic: EconomicAssumptionRow[]
+}
+
+// Combined assumptions (old + PIECE)
+export type AllPieceAssumptions = AllAssumptions & {
+  piece: PieceAssumptions
+}
+
+// ═══════════════════════════════════════════════════════════
+// PIECE OUTPUT TYPES — Calculation Results
+// ═══════════════════════════════════════════════════════════
+
+export type PieceEquipmentLineItem = {
+  equipment_key: string
+  display_name: string
+  equipment_category: 'grid_powered' | 'battery_powered'
+  equipment_type: string
+  quantity: number
+  // Throughput-based metrics
+  kwh_per_teu: number
+  teu_ratio: number
+  annual_kwh: number
+  annual_diesel_liters: number
+  annual_co2_tons: number
+  annual_energy_cost_usd: number
+  annual_fuel_cost_usd: number
+  annual_maintenance_usd: number
+  annual_total_opex_usd: number
+  // CAPEX (scenario only)
+  unit_capex_usd: number
+  total_capex_usd: number
+  lifespan_years: number
+}
+
+export type PieceChargerLineItem = {
+  evse_key: string
+  display_name: string
+  equipment_key: string
+  equipment_count: number
+  units_per_charger: number
+  chargers_required: number
+  chargers_override?: number
+  chargers_final: number
+  power_kw: number
+  total_power_kw: number
+  capex_usd: number
+  total_capex_usd: number
+  annual_opex_usd: number
+  total_annual_opex_usd: number
+}
+
+export type PieceBerthLineItem = {
+  berth_id: string
+  berth_name: string
+  berth_number: number
+  vessel_segment_key: string
+  vessel_segment_name: string
+  annual_calls: number
+  avg_berth_hours: number
+  ops_enabled: boolean
+  dc_enabled: boolean
+  // OPS infrastructure
+  ops_power_mw: number
+  ops_transformer_capex_usd: number
+  ops_converter_capex_usd: number
+  ops_civil_works_capex_usd: number
+  ops_total_capex_usd: number
+  ops_annual_opex_usd: number
+  // At-berth emissions (baseline = all diesel, scenario = OPS fraction)
+  baseline_berth_hours: number
+  baseline_diesel_liters: number
+  baseline_co2_tons: number
+  baseline_fuel_cost_usd: number
+  scenario_diesel_liters: number
+  scenario_shore_power_kwh: number
+  scenario_co2_tons: number
+  scenario_fuel_cost_usd: number
+  scenario_energy_cost_usd: number
+}
+
+export type PieceGridResult = {
+  total_equipment_peak_mw: number
+  total_ops_peak_mw: number
+  total_evse_peak_mw: number
+  gross_peak_demand_mw: number
+  simultaneity_factor: number
+  net_peak_demand_mw: number
+  substation_type: string
+  substation_capex_usd: number
+  cable_length_m: number
+  cable_type: string
+  cable_capex_usd: number
+  total_grid_capex_usd: number
+}
+
+export type PieceTerminalResult = {
+  terminal_id: string
+  terminal_name: string
+  terminal_type: TerminalType
+  annual_throughput: number  // TEU, passengers, or CEU
+
+  // Equipment results (baseline = diesel fleet)
+  baseline_equipment: PieceEquipmentLineItem[]
+  baseline_totals: {
+    total_diesel_liters: number
+    total_kwh: number
+    total_co2_tons: number
+    total_opex_usd: number
+  }
+
+  // Equipment results (scenario = electrified fleet)
+  scenario_equipment: PieceEquipmentLineItem[]
+  scenario_totals: {
+    total_diesel_liters: number
+    total_kwh: number
+    total_co2_tons: number
+    total_opex_usd: number
+    total_equipment_capex_usd: number
+  }
+
+  // Charger infrastructure (scenario only)
+  chargers: PieceChargerLineItem[]
+  charger_totals: {
+    total_chargers: number
+    total_power_kw: number
+    total_capex_usd: number
+    total_annual_opex_usd: number
+  }
+
+  // Berth-level OPS results
+  berths: PieceBerthLineItem[]
+  berth_totals: {
+    total_ops_capex_usd: number
+    total_ops_opex_usd: number
+    baseline_diesel_liters: number
+    baseline_co2_tons: number
+    baseline_fuel_cost_usd: number
+    scenario_diesel_liters: number
+    scenario_shore_power_kwh: number
+    scenario_co2_tons: number
+    scenario_cost_usd: number
+  }
+
+  // Grid infrastructure (scenario only)
+  grid: PieceGridResult
+
+  // Terminal-level aggregation
+  total_baseline_opex_usd: number
+  total_scenario_opex_usd: number
+  total_capex_usd: number
+  annual_opex_savings_usd: number
+  annual_co2_savings_tons: number
+}
+
+export type PiecePortResult = {
+  port: PortConfig
+  terminals: PieceTerminalResult[]
+  totals: {
+    // Baseline totals
+    baseline_diesel_liters: number
+    baseline_kwh: number
+    baseline_co2_tons: number
+    baseline_opex_usd: number
+
+    // Scenario totals
+    scenario_diesel_liters: number
+    scenario_kwh: number
+    scenario_co2_tons: number
+    scenario_opex_usd: number
+
+    // CAPEX breakdown
+    equipment_capex_usd: number
+    charger_capex_usd: number
+    ops_capex_usd: number
+    grid_capex_usd: number
+    total_capex_usd: number
+
+    // Delta metrics
+    diesel_liters_saved: number
+    co2_tons_saved: number
+    co2_reduction_percent: number
+    annual_opex_savings_usd: number
+    simple_payback_years: number | null
+  }
+  economic_assumptions_used: Record<string, number>
+}
+
+export type PieceCalculationResponse = {
+  success: boolean
+  result?: PiecePortResult
+  error?: string
 }

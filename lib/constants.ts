@@ -20,7 +20,7 @@ export const ELECTRIFIED_STYLE: Record<string, string> = {
 // ═══════════════════════════════════════════════════════════
 
 export const inputBase =
-  'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm text-[#414141] bg-white focus:border-[#68a4c2] focus:ring-2 focus:ring-[#d4eefa] focus:outline-none transition-all'
+  'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm text-[#1a1a1a] bg-white focus:border-[#68a4c2] focus:ring-2 focus:ring-[#d4eefa] focus:outline-none transition-all'
 
 export const labelBase = 'block text-xs font-medium text-[#585858] mb-1'
 
