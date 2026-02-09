@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useCallback } from 'react'
+import Link from 'next/link'
+import Image from 'next/image'
 import type {
   PortConfig,
   TerminalConfig,
@@ -131,6 +133,20 @@ export default function EnergyTransitionPage() {
   // ── Render ───────────────────────────────────────────
   return (
     <div className="min-h-screen bg-white">
+      {/* Header with logo */}
+      <header className="w-full py-4 px-6 bg-white border-b border-gray-100">
+        <Link href="/" className="inline-block">
+          <Image
+            src="/200w.gif"
+            alt="Port Hub Tool Logo"
+            width={120}
+            height={40}
+            className="h-10 w-auto"
+            priority
+          />
+        </Link>
+      </header>
+
       {/* Hero */}
       <div className="py-14" style={{ backgroundColor: '#e8f8fc' }}>
         <div className="max-w-7xl mx-auto px-6 lg:px-8 text-center">

@@ -1,22 +1,53 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import type { PieceTerminalConfig, TerminalType } from '@/lib/types'
-import TerminalTypeSelector from './TerminalTypeSelector'
+import type {
+  PieceTerminalConfig,
+  TerminalType,
+  BuildingsLightingConfig,
+  PortServicesBaseline,
+  PortServicesScenario,
+} from '@/lib/types'
 import BerthConfigPanel from './BerthConfigPanel'
+import BerthScenarioPanel from './BerthScenarioPanel'
 import ChargerPanel from './ChargerPanel'
 import GridInfraPanel from './GridInfraPanel'
-import PieceEquipmentTable from './PieceEquipmentTable'
+import BaselineEquipmentTable from './BaselineEquipmentTable'
+import ScenarioEquipmentTable from './ScenarioEquipmentTable'
+import BuildingsLightingPanel from './BuildingsLightingPanel'
+import PortServicesSection from './PortServicesSection'
+import CollapsibleSection from './CollapsibleSection'
 
 type Props = {
   terminal: PieceTerminalConfig
   onChange: (updated: PieceTerminalConfig) => void
-  onRemove: () => void
-  canRemove: boolean
+  onRemove?: () => void
+  canRemove?: boolean
   defaultCollapsed?: boolean
+  mode: 'baseline' | 'scenario'
 }
 
-type TabKey = 'equipment' | 'berths' | 'chargers' | 'grid'
+// Terminal type options
+const TERMINAL_TYPES: { value: TerminalType; label: string }[] = [
+  { value: 'container', label: 'Container' },
+  { value: 'cruise', label: 'Cruise' },
+  { value: 'roro', label: 'RoRo' },
+]
+
+// Vessel segment labels (for berth summary)
+const SEGMENT_LABELS: Record<string, string> = {
+  container_0_3k: '0-3K TEU',
+  container_3_6k: '3-6K TEU',
+  container_6_10k: '6-10K TEU',
+  container_10k_plus: '10K+ TEU',
+  cruise_0_25k: '0-25K GT',
+  cruise_25_100k: '25-100K GT',
+  cruise_100_175k: '100-175K GT',
+  cruise_175k_plus: '175K+ GT',
+  roro_0_4k: '0-4K CEU',
+  roro_4_7k: '4-7K CEU',
+  roro_7k_plus: '7K+ CEU',
+}
 
 // Peak power by equipment type (kW) from PIECE data
 const EQUIPMENT_PEAK_KW: Record<string, number> = {
@@ -24,27 +55,77 @@ const EQUIPMENT_PEAK_KW: Record<string, number> = {
   agv: 200, tt: 440, ech: 220, rs: 840, sc: 360, reefer: 5,
 }
 
+// Default buildings/lighting config
+const DEFAULT_BUILDINGS_LIGHTING: BuildingsLightingConfig = {
+  warehouse_sqm: 0,
+  office_sqm: 0,
+  workshop_sqm: 0,
+  high_mast_lights: 0,
+  area_lights: 0,
+  roadway_lights: 0,
+  annual_operating_hours: 8760,
+}
+
+const DEFAULT_PORT_SERVICES_BASELINE: PortServicesBaseline = {
+  tugs_diesel: 0,
+  tugs_electric: 0,
+  pilot_boats_diesel: 0,
+  pilot_boats_electric: 0,
+}
+
+const DEFAULT_PORT_SERVICES_SCENARIO: PortServicesScenario = {
+  tugs_to_convert: 0,
+  tugs_to_add: 0,
+  pilot_boats_to_convert: 0,
+  pilot_boats_to_add: 0,
+}
+
+// Throughput config by terminal type
+function getThroughputLabel(type: TerminalType): string {
+  switch (type) {
+    case 'container': return 'Annual TEU'
+    case 'cruise': return 'Annual Passengers'
+    case 'roro': return 'Annual CEU'
+  }
+}
+
+function getThroughputPlaceholder(type: TerminalType): string {
+  switch (type) {
+    case 'container': return 'e.g., 500000'
+    case 'cruise': return 'e.g., 200000'
+    case 'roro': return 'e.g., 150000'
+  }
+}
+
 export default function PieceTerminalCard({
   terminal,
   onChange,
   onRemove,
-  canRemove,
+  canRemove = false,
   defaultCollapsed = false,
+  mode,
 }: Props) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed)
-  const [activeTab, setActiveTab] = useState<TabKey>('equipment')
 
-  const tabs: { key: TabKey; label: string }[] = [
-    { key: 'equipment', label: 'Equipment & Throughput' },
-    { key: 'berths', label: 'Berths & Shore Power' },
-    { key: 'chargers', label: 'Chargers (EVSE)' },
-    { key: 'grid', label: 'Grid Infrastructure' },
-  ]
+  const isBaseline = mode === 'baseline'
+
+  // Calculate scenario equipment totals for charger panel
+  const scenarioElectricEquipment = useMemo(() => {
+    const result: Record<string, number> = {}
+    for (const [key, baseline] of Object.entries(terminal.baseline_equipment)) {
+      const scenario = terminal.scenario_equipment[key] ?? { num_to_convert: 0, num_to_add: 0 }
+      const existingElectric = baseline?.existing_electric ?? 0
+      const converted = Math.min(scenario.num_to_convert, baseline?.existing_diesel ?? 0)
+      const added = scenario.num_to_add
+      result[key] = existingElectric + converted + added
+    }
+    return result
+  }, [terminal.baseline_equipment, terminal.scenario_equipment])
 
   // Calculate peak power for grid preview
   const { equipmentPeakKw, chargerPeakKw, opsPeakMw } = useMemo(() => {
     let eqPeak = 0
-    for (const [key, qty] of Object.entries(terminal.scenario_equipment)) {
+    for (const [key, qty] of Object.entries(scenarioElectricEquipment)) {
       eqPeak += (EQUIPMENT_PEAK_KW[key] ?? 0) * qty
     }
 
@@ -58,74 +139,174 @@ export default function PieceTerminalCard({
     ]
     let chargerPeak = 0
     for (const evse of evseConfig) {
-      const qty = terminal.scenario_equipment[evse.key] ?? 0
+      const qty = scenarioElectricEquipment[evse.key] ?? 0
       if (qty > 0) {
         const chargers = terminal.charger_overrides?.[`evse_${evse.key}`] ?? Math.ceil(qty / evse.sharing)
         chargerPeak += chargers * evse.power
       }
     }
 
-    // OPS peak from enabled berths
+    // OPS peak from enabled berths (uses max_vessel_segment_key for grid sizing)
     const opsMwBySegment: Record<string, number> = {
       container_0_3k: 2.0, container_3_6k: 5.0, container_6_10k: 6.0, container_10k_plus: 7.5,
       cruise_0_25k: 4.6, cruise_25_100k: 12.0, cruise_100_175k: 20.0, cruise_175k_plus: 26.0,
       roro_0_4k: 2.0, roro_4_7k: 4.0, roro_7k_plus: 6.5,
-      tug_70bp: 0.3, pilot_boat: 0.1,
     }
     let opsPeak = 0
     for (const berth of terminal.berths) {
-      if (berth.ops_enabled) {
-        opsPeak += opsMwBySegment[berth.vessel_segment_key] ?? 2.0
+      // Include existing OPS and newly enabled OPS
+      const hasExisting = berth.ops_existing
+      const scenario = terminal.berth_scenarios?.find((s) => s.berth_id === berth.id)
+      if (hasExisting || scenario?.ops_enabled) {
+        opsPeak += opsMwBySegment[berth.max_vessel_segment_key] ?? 2.0
       }
     }
 
     return { equipmentPeakKw: eqPeak, chargerPeakKw: chargerPeak, opsPeakMw: opsPeak }
-  }, [terminal.scenario_equipment, terminal.charger_overrides, terminal.berths])
+  }, [scenarioElectricEquipment, terminal.charger_overrides, terminal.berths, terminal.berth_scenarios])
 
   // Quick summary stats
-  const baselineCount = Object.values(terminal.baseline_equipment).reduce((s, v) => s + v, 0)
-  const scenarioCount = Object.values(terminal.scenario_equipment).reduce((s, v) => s + v, 0)
+  const baselineDieselCount = Object.values(terminal.baseline_equipment).reduce((s, e) => s + (e?.existing_diesel || 0), 0)
+  const baselineElectricCount = Object.values(terminal.baseline_equipment).reduce((s, e) => s + (e?.existing_electric || 0), 0)
+  const scenarioTotalElectric = Object.values(scenarioElectricEquipment).reduce((s, v) => s + v, 0)
+
+  const scenarioTotalDiesel = useMemo(() => {
+    let totalDiesel = 0
+    for (const [key, baseline] of Object.entries(terminal.baseline_equipment)) {
+      const scenario = terminal.scenario_equipment[key] ?? { num_to_convert: 0, num_to_add: 0 }
+      const existingDiesel = baseline?.existing_diesel ?? 0
+      const converted = Math.min(scenario.num_to_convert, existingDiesel)
+      totalDiesel += existingDiesel - converted
+    }
+    return totalDiesel
+  }, [terminal.baseline_equipment, terminal.scenario_equipment])
+
   const berthCount = terminal.berths.length
-  const opsCount = terminal.berths.filter((b) => b.ops_enabled).length
+  const opsExistingCount = terminal.berths.filter((b) => b.ops_existing).length
+  const opsScenarioCount = terminal.berth_scenarios?.filter((b) => b.ops_enabled).length ?? 0
+  const totalOpsCount = opsExistingCount + opsScenarioCount
+
+  // Derive max vessel label from berths (largest max_vessel_segment_key across all berths)
+  const maxVesselLabel = useMemo(() => {
+    if (terminal.berths.length === 0) return null
+    const segmentOrder = Object.keys(SEGMENT_LABELS)
+    let maxIdx = -1
+    for (const berth of terminal.berths) {
+      const idx = segmentOrder.indexOf(berth.max_vessel_segment_key)
+      if (idx > maxIdx) maxIdx = idx
+    }
+    if (maxIdx >= 0) return SEGMENT_LABELS[segmentOrder[maxIdx]]
+    return null
+  }, [terminal.berths])
 
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
-      {/* Header */}
+    <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+      {/* ═══════════════════════════════════════════════════════════════
+          HEADER - Terminal name, type dropdown, throughput
+         ═══════════════════════════════════════════════════════════════ */}
       <div
-        className="flex items-center gap-3 px-6 py-4 bg-[#fafafa] border-b border-gray-100 cursor-pointer"
+        className="flex items-center gap-3 px-6 py-4 bg-[#f5f5f5] border-b border-gray-200 cursor-pointer"
         onClick={() => setCollapsed(!collapsed)}
       >
-        <span className="text-[11px] text-[#8c8c8c] w-4 shrink-0">
+        <span className="text-[11px] text-[#777] w-4 shrink-0">
           {collapsed ? '\u25B6' : '\u25BC'}
         </span>
 
-        <input
-          type="text"
-          value={terminal.name}
-          onChange={(e) => onChange({ ...terminal, name: e.target.value })}
-          onClick={(e) => e.stopPropagation()}
-          className="max-w-xs px-2 py-1 rounded border border-gray-200 font-semibold text-sm text-[#1a1a1a] bg-white focus:border-[#3c5e86] focus:outline-none"
-          placeholder="Terminal name"
-        />
+        {/* Terminal name */}
+        {isBaseline ? (
+          <input
+            type="text"
+            value={terminal.name}
+            onChange={(e) => onChange({ ...terminal, name: e.target.value })}
+            onClick={(e) => e.stopPropagation()}
+            className="max-w-[180px] px-2 py-1 rounded border border-gray-300 font-semibold text-sm text-[#1a1a1a] bg-white focus:border-[#3c5e86] focus:outline-none"
+            placeholder="Terminal name"
+          />
+        ) : (
+          <span className="font-semibold text-sm text-[#1a1a1a]">{terminal.name}</span>
+        )}
 
-        <span className="text-[10px] text-white bg-[#3c5e86] px-2 py-0.5 rounded uppercase font-semibold">
-          {terminal.terminal_type}
+        {/* Terminal type dropdown (baseline) or badge (scenario) */}
+        {isBaseline ? (
+          <select
+            value={terminal.terminal_type}
+            onChange={(e) => {
+              e.stopPropagation()
+              onChange({ ...terminal, terminal_type: e.target.value as TerminalType })
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className="px-2 py-1 rounded border border-gray-300 text-xs font-semibold text-[#3c5e86] bg-white focus:border-[#3c5e86] focus:outline-none cursor-pointer"
+          >
+            {TERMINAL_TYPES.map((t) => (
+              <option key={t.value} value={t.value}>{t.label}</option>
+            ))}
+          </select>
+        ) : (
+          <span className="text-[10px] text-white bg-[#3c5e86] px-2 py-0.5 rounded uppercase font-semibold">
+            {terminal.terminal_type}
+          </span>
+        )}
+
+        {/* Throughput input (baseline) or display (scenario) */}
+        {isBaseline ? (
+          <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+            <label className="text-[11px] text-[#666] whitespace-nowrap font-medium">{getThroughputLabel(terminal.terminal_type)}:</label>
+            <input
+              type="number"
+              min={0}
+              step={10000}
+              value={terminal.annual_teu || ''}
+              onChange={(e) => onChange({ ...terminal, annual_teu: parseInt(e.target.value) || 0 })}
+              placeholder={getThroughputPlaceholder(terminal.terminal_type)}
+              className="w-32 px-2 py-1 rounded border border-gray-300 text-xs text-[#1a1a1a] bg-white focus:border-[#3c5e86] focus:outline-none"
+            />
+          </div>
+        ) : (
+          terminal.annual_teu > 0 && (
+            <span className="text-[11px] text-[#555] font-medium">
+              {(terminal.annual_teu / 1000000).toFixed(1)}M TEU
+            </span>
+          )
+        )}
+
+        {/* Mode badge */}
+        <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${
+          isBaseline
+            ? 'bg-amber-100 text-amber-800'
+            : 'bg-green-100 text-green-800'
+        }`}>
+          {isBaseline ? 'BASELINE' : 'SCENARIO'}
         </span>
 
+        {/* Collapsed summary */}
         {collapsed && (
-          <div className="flex items-center gap-4 text-[10px] text-[#8c8c8c]">
-            {terminal.annual_teu > 0 && (
-              <span>{(terminal.annual_teu / 1000000).toFixed(1)}M TEU</span>
+          <div className="flex items-center gap-4 text-[11px] text-[#777]">
+            {isBaseline && (baselineDieselCount > 0 || baselineElectricCount > 0) && (
+              <span>
+                <span className="text-[#7a5c10] font-medium">{baselineDieselCount} diesel</span>
+                {' + '}
+                <span className="text-[#2d5480] font-medium">{baselineElectricCount} electric</span>
+              </span>
             )}
-            {baselineCount > 0 && <span>{baselineCount} baseline</span>}
-            {scenarioCount > 0 && <span>{scenarioCount} electric</span>}
-            {berthCount > 0 && <span>{berthCount} berths ({opsCount} OPS)</span>}
+            {!isBaseline && (scenarioTotalDiesel > 0 || scenarioTotalElectric > 0) && (
+              <span>
+                {scenarioTotalDiesel > 0 && <span className="text-[#7a5c10] font-medium">{scenarioTotalDiesel} diesel</span>}
+                {scenarioTotalDiesel > 0 && scenarioTotalElectric > 0 && ' + '}
+                {scenarioTotalElectric > 0 && <span className="text-[#2d5480] font-medium">{scenarioTotalElectric} electric</span>}
+              </span>
+            )}
+            {berthCount > 0 && (
+              <span>{berthCount} berths{!isBaseline && totalOpsCount > 0 ? ` (${totalOpsCount} OPS)` : ''}</span>
+            )}
+            {maxVesselLabel && (
+              <span>Max: {maxVesselLabel}</span>
+            )}
           </div>
         )}
 
         <div className="flex-1" />
 
-        {canRemove && (
+        {canRemove && isBaseline && onRemove && (
           <button
             type="button"
             onClick={(e) => {
@@ -139,100 +320,150 @@ export default function PieceTerminalCard({
         )}
       </div>
 
-      {/* Content */}
+      {/* ═══════════════════════════════════════════════════════════════
+          CONTENT - Vertical collapsible sections
+         ═══════════════════════════════════════════════════════════════ */}
       {!collapsed && (
         <>
-          {/* Terminal Type Selector */}
-          <div className="p-6 border-b border-gray-100">
-            <TerminalTypeSelector
-              value={terminal.terminal_type}
-              onChange={(type: TerminalType) => onChange({ ...terminal, terminal_type: type })}
-            />
-          </div>
-
-          {/* Tab bar */}
-          <div className="flex border-b border-gray-100">
-            {tabs.map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setActiveTab(tab.key)}
-                className={`flex-1 text-center py-3 text-xs font-semibold uppercase tracking-wide transition-colors
-                  ${
-                    activeTab === tab.key
-                      ? 'text-[#3c5e86] border-b-2 border-[#3c5e86] bg-white'
-                      : 'text-[#8c8c8c] hover:text-[#585858] bg-[#fafafa]'
-                  }`}
+          {/* ────────────────────────────────────────────────────────
+              BASELINE MODE
+             ──────────────────────────────────────────────────────── */}
+          {isBaseline && (
+            <>
+              {/* Berths */}
+              <CollapsibleSection
+                title="Berths"
+                badge={berthCount > 0
+                  ? `${berthCount} berth${berthCount !== 1 ? 's' : ''}${maxVesselLabel ? ` · Max: ${maxVesselLabel}` : ''}`
+                  : undefined}
+                defaultOpen={true}
               >
-                {tab.label}
-              </button>
-            ))}
-          </div>
+                <BerthConfigPanel
+                  berths={terminal.berths}
+                  terminalType={terminal.terminal_type}
+                  onChange={(berths) => onChange({ ...terminal, berths })}
+                />
+              </CollapsibleSection>
 
-          {/* Tab content */}
-          <div className="p-6">
-            {activeTab === 'equipment' && (
-              <div className="space-y-6">
-                {/* Throughput */}
-                <div className="space-y-2">
-                  <label className="block text-[10px] font-bold uppercase tracking-wide text-[#8c8c8c]">
-                    Annual Throughput (TEU)
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    step={10000}
-                    value={terminal.annual_teu || ''}
-                    onChange={(e) =>
-                      onChange({ ...terminal, annual_teu: parseInt(e.target.value) || 0 })
-                    }
-                    placeholder="e.g., 500000"
-                    className="w-48 px-3 py-2 rounded-lg border border-gray-200 text-sm text-[#1a1a1a] bg-white focus:border-[#3c5e86] focus:ring-1 focus:ring-[#3c5e86] focus:outline-none"
-                  />
-                  <p className="text-[10px] text-[#8c8c8c]">
-                    Used for throughput-based energy calculations (kWh/TEU × TEU)
-                  </p>
-                </div>
+              {/* Onshore Equipment */}
+              <CollapsibleSection
+                title="Onshore Equipment"
+                badge={
+                  (baselineDieselCount > 0 || baselineElectricCount > 0)
+                    ? `${baselineDieselCount} diesel + ${baselineElectricCount} electric`
+                    : undefined
+                }
+                defaultOpen={true}
+              >
+                <BaselineEquipmentTable
+                  terminalType={terminal.terminal_type}
+                  equipment={terminal.baseline_equipment}
+                  onChange={(eq) => onChange({ ...terminal, baseline_equipment: eq })}
+                />
+              </CollapsibleSection>
 
-                {/* Equipment Table */}
-                <PieceEquipmentTable
+              {/* Buildings & Lighting */}
+              <CollapsibleSection
+                title="Buildings & Lighting"
+                defaultOpen={false}
+              >
+                <BuildingsLightingPanel
+                  config={terminal.buildings_lighting ?? DEFAULT_BUILDINGS_LIGHTING}
+                  onChange={(config) => onChange({ ...terminal, buildings_lighting: config })}
+                />
+              </CollapsibleSection>
+
+              {/* Offshore Equipment */}
+              <CollapsibleSection
+                title="Offshore Equipment"
+                defaultOpen={false}
+              >
+                <PortServicesSection
+                  baseline={terminal.port_services_baseline ?? DEFAULT_PORT_SERVICES_BASELINE}
+                  scenario={terminal.port_services_scenario ?? DEFAULT_PORT_SERVICES_SCENARIO}
+                  onBaselineChange={(config) => onChange({ ...terminal, port_services_baseline: config })}
+                  onScenarioChange={(config) => onChange({ ...terminal, port_services_scenario: config })}
+                  mode="baseline"
+                />
+              </CollapsibleSection>
+            </>
+          )}
+
+          {/* ────────────────────────────────────────────────────────
+              SCENARIO MODE
+             ──────────────────────────────────────────────────────── */}
+          {!isBaseline && (
+            <>
+              {/* Shore Power (OPS/DC) */}
+              <CollapsibleSection
+                title="Shore Power (OPS/DC)"
+                badge={totalOpsCount > 0 ? `${totalOpsCount}/${berthCount} berths with OPS` : undefined}
+                defaultOpen={true}
+              >
+                <BerthScenarioPanel
+                  berths={terminal.berths}
+                  scenarios={terminal.berth_scenarios ?? []}
+                  terminalType={terminal.terminal_type}
+                  onChange={(scenarios) => onChange({ ...terminal, berth_scenarios: scenarios })}
+                />
+              </CollapsibleSection>
+
+              {/* Onshore Equipment Changes */}
+              <CollapsibleSection
+                title="Onshore Equipment Changes"
+                defaultOpen={true}
+              >
+                <ScenarioEquipmentTable
                   terminalType={terminal.terminal_type}
                   baseline={terminal.baseline_equipment}
                   scenario={terminal.scenario_equipment}
-                  onBaselineChange={(eq) => onChange({ ...terminal, baseline_equipment: eq })}
-                  onScenarioChange={(eq) => onChange({ ...terminal, scenario_equipment: eq })}
+                  onChange={(eq) => onChange({ ...terminal, scenario_equipment: eq })}
                 />
-              </div>
-            )}
+              </CollapsibleSection>
 
-            {activeTab === 'berths' && (
-              <BerthConfigPanel
-                berths={terminal.berths}
-                terminalType={terminal.terminal_type}
-                onChange={(berths) => onChange({ ...terminal, berths })}
-              />
-            )}
+              {/* Chargers */}
+              <CollapsibleSection
+                title="Chargers (EVSE)"
+                defaultOpen={false}
+              >
+                <ChargerPanel
+                  scenarioEquipment={scenarioElectricEquipment}
+                  chargerOverrides={terminal.charger_overrides}
+                  onChange={(overrides) =>
+                    onChange({ ...terminal, charger_overrides: overrides })
+                  }
+                />
+              </CollapsibleSection>
 
-            {activeTab === 'chargers' && (
-              <ChargerPanel
-                scenarioEquipment={terminal.scenario_equipment}
-                chargerOverrides={terminal.charger_overrides}
-                onChange={(overrides) =>
-                  onChange({ ...terminal, charger_overrides: overrides })
-                }
-              />
-            )}
+              {/* Grid Infrastructure */}
+              <CollapsibleSection
+                title="Grid Infrastructure"
+                defaultOpen={false}
+              >
+                <GridInfraPanel
+                  cableLengthM={terminal.cable_length_m ?? 500}
+                  onCableLengthChange={(len) => onChange({ ...terminal, cable_length_m: len })}
+                  equipmentPeakKw={equipmentPeakKw}
+                  chargerPeakKw={chargerPeakKw}
+                  opsPeakMw={opsPeakMw}
+                />
+              </CollapsibleSection>
 
-            {activeTab === 'grid' && (
-              <GridInfraPanel
-                cableLengthM={terminal.cable_length_m ?? 500}
-                onCableLengthChange={(len) => onChange({ ...terminal, cable_length_m: len })}
-                equipmentPeakKw={equipmentPeakKw}
-                chargerPeakKw={chargerPeakKw}
-                opsPeakMw={opsPeakMw}
-              />
-            )}
-          </div>
+              {/* Offshore Equipment Changes */}
+              <CollapsibleSection
+                title="Offshore Equipment Changes"
+                defaultOpen={false}
+              >
+                <PortServicesSection
+                  baseline={terminal.port_services_baseline ?? DEFAULT_PORT_SERVICES_BASELINE}
+                  scenario={terminal.port_services_scenario ?? DEFAULT_PORT_SERVICES_SCENARIO}
+                  onBaselineChange={(config) => onChange({ ...terminal, port_services_baseline: config })}
+                  onScenarioChange={(config) => onChange({ ...terminal, port_services_scenario: config })}
+                  mode="scenario"
+                />
+              </CollapsibleSection>
+            </>
+          )}
         </>
       )}
     </div>

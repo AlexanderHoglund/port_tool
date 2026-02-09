@@ -9,17 +9,95 @@ export type PortConfig = {
 }
 
 // ── PIECE Terminal Types ─────────────────────────────────────
-export type TerminalType = 'container' | 'cruise' | 'roro' | 'port_services'
+export type TerminalType = 'container' | 'cruise' | 'roro'
 
+// ═══════════════════════════════════════════════════════════
+// BASELINE TYPES (Section 1) — Define Current Port State
+// ═══════════════════════════════════════════════════════════
+
+/** Equipment counts for baseline: how many diesel vs already electric */
+export type BaselineEquipmentEntry = {
+  existing_diesel: number    // e.g., 5 diesel terminal tractors
+  existing_electric: number  // e.g., 2 already electric tractors
+}
+
+/** Berth definition for baseline (physical berth + traffic + existing infrastructure) */
+export type BerthDefinition = {
+  id: string
+  berth_number: number
+  berth_name: string
+  max_vessel_segment_key: string       // Design capacity — largest vessel the berth can handle (drives CAPEX, cable sizing)
+  current_vessel_segment_key: string   // Current operations — vessel segment served today (drives OPEX, energy)
+  annual_calls: number
+  avg_berth_hours: number
+  ops_existing: boolean        // Does this berth already have OPS infrastructure?
+  dc_existing: boolean         // Does this berth already have DC charging infrastructure?
+}
+
+/** Buildings & lighting configuration */
+export type BuildingsLightingConfig = {
+  // Buildings (square meters)
+  warehouse_sqm: number
+  office_sqm: number
+  workshop_sqm: number
+  // Lighting (unit counts)
+  high_mast_lights: number      // 1000W each
+  area_lights: number           // 400W each
+  roadway_lights: number        // 250W each
+  // Operating hours
+  annual_operating_hours: number  // Default: 8760 (24/7)
+}
+
+/** Port services baseline: existing diesel and electric counts */
+export type PortServicesBaseline = {
+  tugs_diesel: number
+  tugs_electric: number
+  pilot_boats_diesel: number
+  pilot_boats_electric: number
+}
+
+// ═══════════════════════════════════════════════════════════
+// SCENARIO TYPES (Section 2) — Define Changes to Make
+// ═══════════════════════════════════════════════════════════
+
+/** Equipment changes for scenario: how many to convert, how many to add */
+export type ScenarioEquipmentEntry = {
+  num_to_convert: number  // Convert X diesel → electric
+  num_to_add: number      // Add X new electric units
+}
+
+/** Berth scenario config: OPS/DC toggles for each berth */
+export type BerthScenarioConfig = {
+  berth_id: string         // References BerthDefinition.id
+  ops_enabled: boolean     // Enable OPS shore power infrastructure
+  dc_enabled: boolean      // Enable DC fast charging for electric vessels
+}
+
+/** Port services scenario: how many to convert/add */
+export type PortServicesScenario = {
+  tugs_to_convert: number
+  tugs_to_add: number
+  pilot_boats_to_convert: number
+  pilot_boats_to_add: number
+}
+
+// ═══════════════════════════════════════════════════════════
+// LEGACY TYPES (for backward compatibility)
+// ═══════════════════════════════════════════════════════════
+
+/** @deprecated Use PortServicesBaseline instead */
+export type PortServicesConfig = PortServicesBaseline
+
+/** @deprecated Legacy BerthConfig with ops/dc flags - use BerthDefinition + BerthScenarioConfig */
 export type BerthConfig = {
   id: string
   berth_number: number
   berth_name: string
-  vessel_segment_key: string   // e.g., 'container_6_10k', 'cruise_100_175k'
+  vessel_segment_key: string
   annual_calls: number
   avg_berth_hours: number
-  ops_enabled: boolean         // OPS shore power infrastructure
-  dc_enabled: boolean          // DC fast charging for electric vessels
+  ops_enabled: boolean
+  dc_enabled: boolean
 }
 
 export type VesselCallConfig = {
@@ -66,28 +144,55 @@ export type PieceTerminalConfig = {
   annual_passengers?: number      // For cruise
   annual_ceu?: number             // For RoRo (Car Equivalent Units)
 
-  // Berths (NEW - berth-by-berth OPS/DC config)
-  berths: BerthConfig[]
+  // ══════════════════════════════════════════════════════════
+  // BASELINE (Section 1) — Current state
+  // ══════════════════════════════════════════════════════════
 
-  // Equipment (baseline = diesel, scenario = electric)
-  baseline_equipment: Record<string, number>
-  scenario_equipment: Record<string, number>
+  /** Equipment: existing diesel + electric counts per equipment type */
+  baseline_equipment: Record<string, BaselineEquipmentEntry>
+
+  /** Berths: physical berth definitions (name, segment, calls, hours) */
+  berths: BerthDefinition[]
+
+  /** Buildings & lighting (optional) */
+  buildings_lighting?: BuildingsLightingConfig
+
+  /** Offshore equipment: tugs and pilot boats (per-terminal) */
+  port_services_baseline?: PortServicesBaseline
+
+  // ══════════════════════════════════════════════════════════
+  // SCENARIO (Section 2) — Changes to make
+  // ══════════════════════════════════════════════════════════
+
+  /** Equipment: how many to convert + how many to add per type */
+  scenario_equipment: Record<string, ScenarioEquipmentEntry>
+
+  /** Berth scenarios: OPS/DC toggles per berth */
+  berth_scenarios: BerthScenarioConfig[]
+
+  /** Offshore equipment scenario: convert/add tugs and pilot boats */
+  port_services_scenario?: PortServicesScenario
 
   // Charger overrides (auto-calculated from equipment, but can be manually adjusted)
   charger_overrides?: Record<string, number>
 
   // Grid infrastructure
   cable_length_m?: number         // Total cable run in meters
-
-  // Service boats (for port_services type)
-  tugs?: { diesel_count: number; electric_count: number }
-  pilot_boats?: { diesel_count: number; electric_count: number }
 }
 
 export type PieceCalculationRequest = {
   port: PortConfig
   terminals: PieceTerminalConfig[]
-  economic_overrides?: Record<string, number>  // Override PIECE defaults
+
+  // Port-level services (tugs, pilot boats)
+  port_services_baseline?: PortServicesBaseline
+  port_services_scenario?: PortServicesScenario
+
+  // Port-level buildings & lighting (if not per-terminal)
+  buildings_lighting?: BuildingsLightingConfig
+
+  // Override PIECE economic defaults
+  economic_overrides?: Record<string, number>
 }
 
 export type CalculationRequest = {
@@ -413,8 +518,10 @@ export type PieceBerthLineItem = {
   berth_id: string
   berth_name: string
   berth_number: number
-  vessel_segment_key: string
-  vessel_segment_name: string
+  max_vessel_segment_key: string       // Design capacity (drives CAPEX, cable sizing)
+  max_vessel_segment_name: string
+  current_vessel_segment_key: string   // Current operations (drives OPEX, energy)
+  current_vessel_segment_name: string
   annual_calls: number
   avg_berth_hours: number
   ops_enabled: boolean

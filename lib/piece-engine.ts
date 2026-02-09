@@ -25,8 +25,85 @@ import type {
   PieceGridResult,
   PieceTerminalResult,
   PiecePortResult,
-  BerthConfig,
+  BerthDefinition,
+  BerthScenarioConfig,
+  BaselineEquipmentEntry,
+  ScenarioEquipmentEntry,
 } from './types'
+
+// ═══════════════════════════════════════════════════════════
+// TYPE CONVERSION HELPERS
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Convert BaselineEquipmentEntry to simple counts for baseline calculation
+ * Returns counts where grid_powered = electric only, battery_powered = diesel only
+ */
+function getBaselineCounts(
+  equipment: Record<string, BaselineEquipmentEntry>,
+  pieceEquipment: PieceEquipmentRow[]
+): Record<string, number> {
+  const counts: Record<string, number> = {}
+  for (const [key, entry] of Object.entries(equipment)) {
+    const meta = pieceEquipment.find((e) => e.equipment_key === key)
+    if (!meta) continue
+
+    // Grid-powered uses electric count, battery-powered uses diesel count
+    if (meta.equipment_category === 'grid_powered') {
+      counts[key] = entry.existing_electric
+    } else {
+      counts[key] = entry.existing_diesel + entry.existing_electric
+    }
+  }
+  return counts
+}
+
+/**
+ * Convert to scenario counts (all electric)
+ * Scenario = existing_electric + num_to_convert + num_to_add
+ */
+function getScenarioCounts(
+  baseline: Record<string, BaselineEquipmentEntry>,
+  scenario: Record<string, ScenarioEquipmentEntry>,
+  pieceEquipment: PieceEquipmentRow[]
+): Record<string, number> {
+  const counts: Record<string, number> = {}
+  for (const [key, baseEntry] of Object.entries(baseline)) {
+    const meta = pieceEquipment.find((e) => e.equipment_key === key)
+    if (!meta) continue
+
+    const scenEntry = scenario[key] ?? { num_to_convert: 0, num_to_add: 0 }
+
+    if (meta.equipment_category === 'grid_powered') {
+      // Grid-powered: existing_electric + any new
+      counts[key] = baseEntry.existing_electric + scenEntry.num_to_add
+    } else {
+      // Battery-powered: existing_electric + converted diesel + new
+      const converted = Math.min(scenEntry.num_to_convert, baseEntry.existing_diesel)
+      counts[key] = baseEntry.existing_electric + converted + scenEntry.num_to_add
+    }
+  }
+  return counts
+}
+
+/**
+ * Merge BerthDefinition with BerthScenarioConfig for calculation
+ */
+type MergedBerth = BerthDefinition & { ops_enabled: boolean; dc_enabled: boolean }
+
+function mergeBerthConfigs(
+  berths: BerthDefinition[],
+  scenarios: BerthScenarioConfig[]
+): MergedBerth[] {
+  return berths.map((berth) => {
+    const scenario = scenarios.find((s) => s.berth_id === berth.id)
+    return {
+      ...berth,
+      ops_enabled: scenario?.ops_enabled ?? false,
+      dc_enabled: scenario?.dc_enabled ?? false,
+    }
+  })
+}
 
 // ═══════════════════════════════════════════════════════════
 // HELPER FUNCTIONS
@@ -307,7 +384,7 @@ export function calculateChargers(
  * - Scenario: OPS-enabled berths use shore power, others use diesel
  */
 export function calculateBerthInfrastructure(
-  berths: BerthConfig[],
+  berths: MergedBerth[],
   fleetOps: PieceFleetOpsRow[],
   economicMap: Record<string, number>
 ): {
@@ -355,16 +432,21 @@ export function calculateBerthInfrastructure(
   let totalScenarioCost = 0
 
   for (const berth of berths) {
-    const fleetRow = fleetOps.find(
-      (f) => f.vessel_segment_key === berth.vessel_segment_key
+    // CAPEX & infrastructure sizing uses MAX vessel segment (design capacity)
+    const maxFleetRow = fleetOps.find(
+      (f) => f.vessel_segment_key === berth.max_vessel_segment_key
+    )
+    // Current operations lookup (for future OPEX-per-segment support)
+    const currentFleetRow = fleetOps.find(
+      (f) => f.vessel_segment_key === berth.current_vessel_segment_key
     )
 
-    // Default values if segment not found
-    const opsPowerMw = fleetRow?.ops_power_mw ?? 2.0
-    const transformerCapex = fleetRow?.transformer_capex_usd ?? 350000
-    const converterCapex = fleetRow?.converter_capex_usd ?? 280000
-    const civilWorksCapex = fleetRow?.civil_works_capex_usd ?? 124000
-    const opsAnnualOpex = fleetRow?.annual_opex_usd ?? 10000
+    // Default values if segment not found — all sized to MAX vessel
+    const opsPowerMw = maxFleetRow?.ops_power_mw ?? 2.0
+    const transformerCapex = maxFleetRow?.transformer_capex_usd ?? 350000
+    const converterCapex = maxFleetRow?.converter_capex_usd ?? 280000
+    const civilWorksCapex = maxFleetRow?.civil_works_capex_usd ?? 124000
+    const opsAnnualOpex = maxFleetRow?.annual_opex_usd ?? 10000
 
     // Total OPS CAPEX for this berth (if OPS enabled)
     const berth_ops_capex = berth.ops_enabled
@@ -404,8 +486,10 @@ export function calculateBerthInfrastructure(
       berth_id: berth.id,
       berth_name: berth.berth_name,
       berth_number: berth.berth_number,
-      vessel_segment_key: berth.vessel_segment_key,
-      vessel_segment_name: fleetRow?.display_name ?? berth.vessel_segment_key,
+      max_vessel_segment_key: berth.max_vessel_segment_key,
+      max_vessel_segment_name: maxFleetRow?.display_name ?? berth.max_vessel_segment_key,
+      current_vessel_segment_key: berth.current_vessel_segment_key,
+      current_vessel_segment_name: currentFleetRow?.display_name ?? berth.current_vessel_segment_key,
       annual_calls: berth.annual_calls,
       avg_berth_hours: berth.avg_berth_hours,
       ops_enabled: berth.ops_enabled,
@@ -559,11 +643,22 @@ export function calculateTerminalPiece(
     (e) => e.terminal_type_key === terminal.terminal_type
   )
 
+  // Convert equipment entries to counts for calculation
+  const baselineCounts = getBaselineCounts(terminal.baseline_equipment, terminalEquipment)
+  const scenarioCounts = getScenarioCounts(
+    terminal.baseline_equipment,
+    terminal.scenario_equipment,
+    terminalEquipment
+  )
+
+  // Merge berth definitions with scenario configs
+  const mergedBerths = mergeBerthConfigs(terminal.berths, terminal.berth_scenarios ?? [])
+
   // ── Baseline Equipment ──
   // Grid-powered: uses electricity (STS, RMG, RTG, ASC, MHC, Reefer are already electric)
   // Battery-powered: uses diesel (AGV, TT, ECH, RS, SC are diesel-powered today)
   const baselineResult = calculateEquipmentPiece(
-    terminal.baseline_equipment,
+    baselineCounts,
     terminal.annual_teu,
     terminalEquipment,
     economicMap,
@@ -574,7 +669,7 @@ export function calculateTerminalPiece(
   // Grid-powered: uses electricity (same as baseline - no change)
   // Battery-powered: now uses electricity (transitioned from diesel to electric)
   const scenarioResult = calculateEquipmentPiece(
-    terminal.scenario_equipment,
+    scenarioCounts,
     terminal.annual_teu,
     terminalEquipment,
     economicMap,
@@ -589,8 +684,9 @@ export function calculateTerminalPiece(
 
   const batteryEquipmentCounts: Record<string, number> = {}
   for (const key of batteryEquipmentKeys) {
-    if (terminal.scenario_equipment[key] > 0) {
-      batteryEquipmentCounts[key] = terminal.scenario_equipment[key]
+    const count = scenarioCounts[key] ?? 0
+    if (count > 0) {
+      batteryEquipmentCounts[key] = count
     }
   }
 
@@ -602,7 +698,7 @@ export function calculateTerminalPiece(
 
   // ── Berths / OPS ──
   const berthResult = calculateBerthInfrastructure(
-    terminal.berths,
+    mergedBerths,
     assumptions.fleetOps,
     economicMap
   )
@@ -610,7 +706,7 @@ export function calculateTerminalPiece(
   // ── Grid Infrastructure ──
   // Calculate peak power from scenario equipment
   let equipmentPeakKw = 0
-  for (const [key, qty] of Object.entries(terminal.scenario_equipment)) {
+  for (const [key, qty] of Object.entries(scenarioCounts)) {
     const meta = terminalEquipment.find((e) => e.equipment_key === key)
     if (meta && qty > 0) {
       equipmentPeakKw += meta.peak_power_kw * qty

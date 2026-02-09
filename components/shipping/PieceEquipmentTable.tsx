@@ -9,6 +9,8 @@ type Props = {
   scenario: Record<string, number>
   onBaselineChange: (updated: Record<string, number>) => void
   onScenarioChange: (updated: Record<string, number>) => void
+  showOnlyBaseline?: boolean
+  showOnlyScenario?: boolean
 }
 
 // PIECE equipment data grouped by category
@@ -41,8 +43,8 @@ const PIECE_EQUIPMENT: EquipmentMeta[] = [
 ]
 
 const CATEGORIES = [
-  { key: 'grid_powered', label: 'Grid-Powered Equipment', color: '#68a4c2' },
-  { key: 'battery_powered', label: 'Battery-Powered Equipment', color: '#7ebb68' },
+  { key: 'grid_powered', label: 'Grid-Powered Equipment', sublabel: '(electric in both baseline & scenario)', color: '#68a4c2' },
+  { key: 'battery_powered', label: 'Battery-Powered Equipment', sublabel: '(diesel → electric)', color: '#7ebb68' },
 ] as const
 
 function EquipmentRow({
@@ -51,14 +53,19 @@ function EquipmentRow({
   scenarioQty,
   onBaselineChange,
   onScenarioChange,
+  showOnlyBaseline,
+  showOnlyScenario,
 }: {
   meta: EquipmentMeta
   baselineQty: number
   scenarioQty: number
   onBaselineChange: (qty: number) => void
   onScenarioChange: (qty: number) => void
+  showOnlyBaseline?: boolean
+  showOnlyScenario?: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
+  const showBoth = !showOnlyBaseline && !showOnlyScenario
 
   function parseQty(raw: string): number {
     if (raw === '') return 0
@@ -83,31 +90,39 @@ function EquipmentRow({
         </td>
         <td className="py-2 px-3 text-center text-xs text-[#8c8c8c]">{meta.kwhPerTeu}</td>
         <td className="py-2 px-3 text-center text-xs text-[#8c8c8c]">{meta.peakKw}</td>
-        <td className="py-2 px-3 bg-[#f5f3f0]">
-          <input
-            type="number"
-            min={0}
-            value={baselineQty || ''}
-            placeholder="0"
-            onChange={(e) => onBaselineChange(parseQty(e.target.value))}
-            className="w-full px-2 py-1.5 rounded border border-[#d4cfc8] text-sm text-center text-[#1a1a1a] bg-white focus:border-[#a89e92] focus:outline-none"
-          />
-        </td>
-        <td className="py-2 px-3 bg-[#edf5fb]">
-          <input
-            type="number"
-            min={0}
-            value={scenarioQty || ''}
-            placeholder="0"
-            onChange={(e) => onScenarioChange(parseQty(e.target.value))}
-            className="w-full px-2 py-1.5 rounded border border-[#b8daf0] text-sm text-center text-[#1a1a1a] bg-white focus:border-[#68a4c2] focus:outline-none"
-          />
-        </td>
+
+        {/* Baseline column */}
+        {(showBoth || showOnlyBaseline) && (
+          <td className="py-2 px-3 bg-[#f5f3f0]">
+            <input
+              type="number"
+              min={0}
+              value={baselineQty || ''}
+              placeholder="0"
+              onChange={(e) => onBaselineChange(parseQty(e.target.value))}
+              className="w-full px-2 py-1.5 rounded border border-[#d4cfc8] text-sm text-center text-[#1a1a1a] bg-white focus:border-[#a89e92] focus:outline-none"
+            />
+          </td>
+        )}
+
+        {/* Scenario column */}
+        {(showBoth || showOnlyScenario) && (
+          <td className="py-2 px-3 bg-[#edf5fb]">
+            <input
+              type="number"
+              min={0}
+              value={scenarioQty || ''}
+              placeholder="0"
+              onChange={(e) => onScenarioChange(parseQty(e.target.value))}
+              className="w-full px-2 py-1.5 rounded border border-[#b8daf0] text-sm text-center text-[#1a1a1a] bg-white focus:border-[#68a4c2] focus:outline-none"
+            />
+          </td>
+        )}
       </tr>
 
       {expanded && (
         <tr className="border-b border-gray-100">
-          <td colSpan={5} className="p-0">
+          <td colSpan={showBoth ? 5 : 4} className="p-0">
             <div className="bg-[#fafafa] px-8 py-3 text-xs space-y-1">
               <div><span className="text-[#8c8c8c]">Type:</span> <span className="text-[#585858]">{meta.type}</span></div>
               <div><span className="text-[#8c8c8c]">CAPEX:</span> <span className="text-[#585858]">${(meta.capexUsd / 1000).toLocaleString()}K</span></div>
@@ -122,34 +137,42 @@ function EquipmentRow({
 
 function CategoryGroup({
   label,
+  sublabel,
   color,
   items,
   baseline,
   scenario,
   onBaselineChange,
   onScenarioChange,
+  showOnlyBaseline,
+  showOnlyScenario,
 }: {
   label: string
+  sublabel: string
   color: string
   items: EquipmentMeta[]
   baseline: Record<string, number>
   scenario: Record<string, number>
   onBaselineChange: (updated: Record<string, number>) => void
   onScenarioChange: (updated: Record<string, number>) => void
+  showOnlyBaseline?: boolean
+  showOnlyScenario?: boolean
 }) {
   const [open, setOpen] = useState(true)
   const count = items.reduce((s, m) => s + (baseline[m.key] || 0) + (scenario[m.key] || 0), 0)
+  const showBoth = !showOnlyBaseline && !showOnlyScenario
 
   if (items.length === 0) return null
 
   return (
     <>
       <tr className="cursor-pointer hover:bg-gray-50" onClick={() => setOpen(!open)}>
-        <td colSpan={5} className="py-2.5 px-3 border-b border-gray-200">
+        <td colSpan={showBoth ? 5 : 4} className="py-2.5 px-3 border-b border-gray-200">
           <div className="flex items-center gap-2">
             <span className="text-[10px] text-[#8c8c8c] w-4">{open ? '\u25BC' : '\u25B6'}</span>
             <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: color }} />
             <span className="text-xs font-semibold text-[#414141]">{label}</span>
+            <span className="text-[10px] text-[#aaa]">{sublabel}</span>
             <span className="text-[10px] text-[#aaa]">
               ({items.length} types{count > 0 ? ` \u2022 ${count} units` : ''})
             </span>
@@ -165,6 +188,8 @@ function CategoryGroup({
           scenarioQty={scenario[meta.key] ?? 0}
           onBaselineChange={(qty) => onBaselineChange({ ...baseline, [meta.key]: qty })}
           onScenarioChange={(qty) => onScenarioChange({ ...scenario, [meta.key]: qty })}
+          showOnlyBaseline={showOnlyBaseline}
+          showOnlyScenario={showOnlyScenario}
         />
       ))}
     </>
@@ -177,11 +202,15 @@ export default function PieceEquipmentTable({
   scenario,
   onBaselineChange,
   onScenarioChange,
+  showOnlyBaseline = false,
+  showOnlyScenario = false,
 }: Props) {
   // Filter equipment by terminal type
   const filteredEquipment = PIECE_EQUIPMENT.filter((e) =>
     e.terminalTypes.includes(terminalType)
   )
+
+  const showBoth = !showOnlyBaseline && !showOnlyScenario
 
   function copyBaselineToScenario() {
     onScenarioChange({ ...baseline })
@@ -192,7 +221,7 @@ export default function PieceEquipmentTable({
       <table className="w-full">
         <thead>
           <tr>
-            <th className="text-left py-3 px-3 text-[10px] font-bold uppercase text-[#8c8c8c] bg-white w-[40%]">
+            <th className={`text-left py-3 px-3 text-[10px] font-bold uppercase text-[#8c8c8c] bg-white ${showBoth ? 'w-[40%]' : 'w-[50%]'}`}>
               Equipment
             </th>
             <th className="text-center py-3 px-3 text-[10px] font-bold uppercase text-[#8c8c8c] bg-white w-[12%]">
@@ -201,14 +230,22 @@ export default function PieceEquipmentTable({
             <th className="text-center py-3 px-3 text-[10px] font-bold uppercase text-[#8c8c8c] bg-white w-[12%]">
               Peak kW
             </th>
-            <th className="text-center py-3 px-3 text-[10px] font-bold uppercase bg-[#e8e4de] text-[#7a7267] w-[18%]">
-              Current Fleet
-              <span className="block text-[9px] font-normal">(Diesel)</span>
-            </th>
-            <th className="text-center py-3 px-3 text-[10px] font-bold uppercase bg-[#d4eefa] text-[#3c5e86] w-[18%]">
-              Electrified Fleet
-              <span className="block text-[9px] font-normal">(Electric)</span>
-            </th>
+
+            {/* Baseline header */}
+            {(showBoth || showOnlyBaseline) && (
+              <th className={`text-center py-3 px-3 text-[10px] font-bold uppercase bg-[#e8e4de] text-[#7a7267] ${showBoth ? 'w-[18%]' : 'w-[26%]'}`}>
+                {showOnlyBaseline ? 'Quantity' : 'Current Fleet'}
+                {showBoth && <span className="block text-[9px] font-normal">(Diesel)</span>}
+              </th>
+            )}
+
+            {/* Scenario header */}
+            {(showBoth || showOnlyScenario) && (
+              <th className={`text-center py-3 px-3 text-[10px] font-bold uppercase bg-[#d4eefa] text-[#3c5e86] ${showBoth ? 'w-[18%]' : 'w-[26%]'}`}>
+                {showOnlyScenario ? 'Quantity' : 'Electrified Fleet'}
+                {showBoth && <span className="block text-[9px] font-normal">(Electric)</span>}
+              </th>
+            )}
           </tr>
         </thead>
         <tbody>
@@ -216,26 +253,32 @@ export default function PieceEquipmentTable({
             <CategoryGroup
               key={cat.key}
               label={cat.label}
+              sublabel={cat.sublabel}
               color={cat.color}
               items={filteredEquipment.filter((e) => e.category === cat.key)}
               baseline={baseline}
               scenario={scenario}
               onBaselineChange={onBaselineChange}
               onScenarioChange={onScenarioChange}
+              showOnlyBaseline={showOnlyBaseline}
+              showOnlyScenario={showOnlyScenario}
             />
           ))}
         </tbody>
       </table>
 
-      <div className="flex items-center justify-end px-4 py-2.5 bg-[#fafafa] border-t border-gray-100">
-        <button
-          type="button"
-          onClick={copyBaselineToScenario}
-          className="text-[11px] font-medium text-[#3c5e86] hover:text-[#2a4566]"
-        >
-          Copy Current Fleet → Electrified Fleet
-        </button>
-      </div>
+      {/* Footer with copy button - only show when both columns are visible */}
+      {showBoth && (
+        <div className="flex items-center justify-end px-4 py-2.5 bg-[#fafafa] border-t border-gray-100">
+          <button
+            type="button"
+            onClick={copyBaselineToScenario}
+            className="text-[11px] font-medium text-[#3c5e86] hover:text-[#2a4566]"
+          >
+            Copy Current Fleet → Electrified Fleet
+          </button>
+        </div>
+      )}
     </div>
   )
 }

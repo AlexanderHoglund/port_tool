@@ -179,7 +179,7 @@ function TerminalDetailCard({ terminal }: { terminal: PieceTerminalResult }) {
                     {terminal.berths.map((b) => (
                       <tr key={b.berth_id} className="border-b border-gray-100">
                         <td className="py-1 text-[#585858]">{b.berth_name}</td>
-                        <td className="py-1 text-[#8c8c8c]">{b.vessel_segment_name}</td>
+                        <td className="py-1 text-[#8c8c8c]">{b.max_vessel_segment_name}</td>
                         <td className="py-1 text-center">{b.ops_enabled ? '✓' : '-'}</td>
                         <td className="py-1 text-center">{b.ops_enabled ? b.ops_power_mw.toFixed(1) : '-'}</td>
                         <td className="py-1 text-right">{formatCurrency(b.ops_total_capex_usd)}</td>
