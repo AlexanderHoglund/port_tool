@@ -100,7 +100,7 @@ export default function ChargerPanel({ scenarioEquipment, chargerOverrides, onCh
                         updateOverride(c.evse_key, parseInt(val) || 0)
                       }
                     }}
-                    className="w-16 px-2 py-1 rounded border border-gray-200 text-sm text-center text-[#1a1a1a] bg-white focus:border-[#3c5e86] focus:ring-1 focus:ring-[#3c5e86] focus:outline-none"
+                    className="w-16 px-2 py-1 rounded border border-gray-200 text-sm text-center text-[#414141] bg-white focus:border-[#3c5e86] focus:ring-1 focus:ring-[#3c5e86] focus:outline-none"
                   />
                 </td>
                 <td className="py-2 px-3 text-center font-semibold text-[#3c5e86]">{c.final}</td>

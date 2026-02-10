@@ -12,7 +12,7 @@ type Props = {
 export default function CollapsibleSection({
   title,
   badge,
-  defaultOpen = true,
+  defaultOpen = false,
   children,
 }: Props) {
   const [open, setOpen] = useState(defaultOpen)

@@ -1,12 +1,7 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
-import Link from 'next/link'
-import Image from 'next/image'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import type {
-  PortConfig,
-  PieceTerminalConfig,
-  PiecePortResult,
   PieceCalculationRequest,
   TerminalType,
   BaselineEquipmentEntry,
@@ -17,38 +12,65 @@ import type {
 import PortIdentitySection from '@/components/shipping/PortIdentitySection'
 import PieceTerminalCard from '@/components/shipping/PieceTerminalCard'
 import PieceResultsSection from '@/components/shipping/PieceResultsSection'
-
-const INITIAL_PORT: PortConfig = {
-  name: '',
-  location: '',
-  size_key: '',
-}
-
-let terminalCounter = 0
-
-function createDefaultTerminal(): PieceTerminalConfig {
-  terminalCounter++
-  return {
-    id: crypto.randomUUID(),
-    name: `Terminal ${terminalCounter}`,
-    terminal_type: 'container',
-    annual_teu: 0,
-    berths: [],
-    baseline_equipment: {},
-    scenario_equipment: {},
-    berth_scenarios: [],
-  }
-}
+import { usePieceContext, createDefaultTerminal } from './context/PieceContext'
+import { savePort } from '@/lib/piece-saved-ports'
+import { createClient } from '@/utils/supabase/client'
 
 export default function PiecePage() {
-  const [port, setPort] = useState<PortConfig>(INITIAL_PORT)
-  const [terminals, setTerminals] = useState<PieceTerminalConfig[]>(() => {
-    terminalCounter = 0
-    return [createDefaultTerminal()]
-  })
-  const [result, setResult] = useState<PiecePortResult | null>(null)
+  // ── Context (persistent across tab navigation) ──
+  const {
+    port, setPort,
+    terminals, setTerminals,
+    result, setResult,
+    resultsClearedByAssumptions,
+    currentAssumptionFingerprint,
+    refreshAssumptionFingerprint,
+  } = usePieceContext()
+
+  // ── Local transient state ──
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showSaveDialog, setShowSaveDialog] = useState(false)
+  const [saveName, setSaveName] = useState('')
+  const [saveDescription, setSaveDescription] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  // Refresh assumption fingerprint when returning to this page
+  useEffect(() => {
+    refreshAssumptionFingerprint()
+  }, [refreshAssumptionFingerprint])
+
+  // Fetch override summary for display under calculate button
+  const OVERRIDE_TABLE_LABELS: Record<string, string> = {
+    economic_assumptions: 'Economic',
+    piece_equipment: 'Equipment',
+    piece_evse: 'EVSE',
+    piece_fleet_ops: 'Vessel & OPS',
+    piece_grid: 'Grid',
+  }
+  const [overrideSummary, setOverrideSummary] = useState<{ table: string; count: number }[]>([])
+
+  useEffect(() => {
+    async function fetchOverrides() {
+      const supabase = createClient()
+      const { data } = await supabase
+        .from('piece_assumption_overrides')
+        .select('table_name')
+        .eq('profile_name', 'default')
+      if (data && data.length > 0) {
+        const counts: Record<string, number> = {}
+        for (const row of data) {
+          counts[row.table_name] = (counts[row.table_name] || 0) + 1
+        }
+        setOverrideSummary(
+          Object.entries(counts).map(([table, count]) => ({ table, count }))
+        )
+      } else {
+        setOverrideSummary([])
+      }
+    }
+    fetchOverrides()
+  }, [currentAssumptionFingerprint])
 
   // Refs for scrolling
   const section1Ref = useRef<HTMLDivElement>(null)
@@ -58,15 +80,15 @@ export default function PiecePage() {
   // Terminal CRUD
   const addTerminal = useCallback(() => {
     setTerminals((prev) => [...prev, createDefaultTerminal()])
-  }, [])
+  }, [setTerminals])
 
   const removeTerminal = useCallback((id: string) => {
     setTerminals((prev) => prev.filter((t) => t.id !== id))
-  }, [])
+  }, [setTerminals])
 
-  const updateTerminal = useCallback((id: string, updated: PieceTerminalConfig) => {
+  const updateTerminal = useCallback((id: string, updated: typeof terminals[number]) => {
     setTerminals((prev) => prev.map((t) => (t.id === id ? updated : t)))
-  }, [])
+  }, [setTerminals])
 
   // Scroll to section
   const scrollToSection = (ref: React.RefObject<HTMLDivElement | null>) => {
@@ -79,8 +101,6 @@ export default function PiecePage() {
   // Load typical values based on port size
   const loadTypicalValues = useCallback(() => {
     if (!port.size_key) return
-
-    terminalCounter = 0
 
     type TerminalDef = {
       name: string
@@ -280,11 +300,8 @@ export default function PiecePage() {
     const totalTugs = portDef.portServices.tugs
     const totalPilotBoats = portDef.portServices.pilotBoats
 
-    const newTerminals: PieceTerminalConfig[] = portDef.terminals.map((termDef, termIdx) => {
-      terminalCounter++
-
+    const newTerminals = portDef.terminals.map((termDef, termIdx) => {
       // Create berth definitions (baseline)
-      // For typical values, max vessel = current segment (can be changed by user)
       const berths: BerthDefinition[] = termDef.berths.map((berthDef, idx) => ({
         id: crypto.randomUUID(),
         berth_number: idx + 1,
@@ -305,7 +322,6 @@ export default function PiecePage() {
       }))
 
       // Create baseline equipment with diesel/electric split
-      // Grid-powered = all electric, Battery-powered = all diesel in baseline
       const baseline_equipment: Record<string, BaselineEquipmentEntry> = {}
       for (const [key, qty] of Object.entries(termDef.equipment)) {
         if (GRID_POWERED_EQUIPMENT.includes(key)) {
@@ -354,7 +370,7 @@ export default function PiecePage() {
 
     setTerminals(newTerminals)
     setResult(null)
-  }, [port.size_key])
+  }, [port.size_key, setTerminals, setResult])
 
   // Calculate
   const handleCalculate = async () => {
@@ -363,8 +379,8 @@ export default function PiecePage() {
 
     try {
       // Aggregate port services from all terminals for the API
-      let aggBaseline = { tugs_diesel: 0, tugs_electric: 0, pilot_boats_diesel: 0, pilot_boats_electric: 0 }
-      let aggScenario = { tugs_to_convert: 0, tugs_to_add: 0, pilot_boats_to_convert: 0, pilot_boats_to_add: 0 }
+      const aggBaseline = { tugs_diesel: 0, tugs_electric: 0, pilot_boats_diesel: 0, pilot_boats_electric: 0 }
+      const aggScenario = { tugs_to_convert: 0, tugs_to_add: 0, pilot_boats_to_convert: 0, pilot_boats_to_add: 0 }
       for (const t of terminals) {
         if (t.port_services_baseline) {
           aggBaseline.tugs_diesel += t.port_services_baseline.tugs_diesel
@@ -399,7 +415,8 @@ export default function PiecePage() {
         setError(data.error || 'Calculation failed')
         setResult(null)
       } else {
-        setResult(data.result)
+        // Pass the current assumption fingerprint so stale detection works
+        setResult(data.result, currentAssumptionFingerprint ?? undefined)
         setTimeout(() => scrollToSection(section3Ref), 100)
       }
     } catch (err: unknown) {
@@ -409,6 +426,28 @@ export default function PiecePage() {
     }
 
     setLoading(false)
+  }
+
+  // Save scenario
+  const handleSave = async () => {
+    if (!saveName.trim()) return
+    setSaving(true)
+    try {
+      await savePort({
+        scenario_name: saveName.trim(),
+        description: saveDescription.trim() || undefined,
+        port,
+        terminals,
+        result,
+        assumption_hash: currentAssumptionFingerprint ?? undefined,
+      })
+      setShowSaveDialog(false)
+      setSaveName('')
+      setSaveDescription('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save')
+    }
+    setSaving(false)
   }
 
   // Validation - check if any equipment has been configured
@@ -438,37 +477,9 @@ export default function PiecePage() {
   )
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* Header with logo */}
-      <header className="w-full py-4 px-6 bg-white border-b border-gray-100">
-        <Link href="/" className="inline-block">
-          <Image
-            src="/200w.gif"
-            alt="Port Hub Tool Logo"
-            width={120}
-            height={40}
-            className="h-10 w-auto"
-            priority
-          />
-        </Link>
-      </header>
-
-      {/* Hero */}
-      <div className="py-10" style={{ backgroundColor: '#e8f8fc' }}>
-        <div className="max-w-7xl mx-auto px-6 lg:px-8 text-center">
-          <h1 className="text-4xl font-extralight text-[#414141] mb-3 tracking-tight">
-            PIECE Tool
-          </h1>
-          <p className="text-sm font-light text-[#585858] max-w-2xl mx-auto">
-            Port Infrastructure for Electric &amp; Clean Energy. Configure terminals with
-            throughput-based calculations, berth-by-berth OPS, charger infrastructure,
-            and grid modeling.
-          </p>
-        </div>
-      </div>
-
+    <>
       {/* Progress Indicator - Sticky */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+      <div className="bg-white/80 backdrop-blur-sm border-b border-[#dcdcdc] sticky top-20 z-10">
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
           <div className="flex items-center justify-center py-4 gap-2">
             <button
@@ -476,14 +487,14 @@ export default function PiecePage() {
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
                 isSection1Complete
                   ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                  : 'bg-[#3c5e86] text-white'
+                  : 'bg-[#d4eefa] text-[#3c5e86]'
               }`}
             >
               <span
                 className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
                   isSection1Complete
                     ? 'bg-green-600 text-white'
-                    : 'bg-white text-[#3c5e86]'
+                    : 'bg-[#3c5e86] text-white'
                 }`}
               >
                 {isSection1Complete ? '\u2713' : '1'}
@@ -491,7 +502,7 @@ export default function PiecePage() {
               <span className="text-sm font-medium">Define Baseline</span>
             </button>
 
-            <div className="w-8 h-0.5 bg-gray-300" />
+            <div className="w-8 h-0.5 bg-[#bebebe]" />
 
             <button
               onClick={() => scrollToSection(section2Ref)}
@@ -499,8 +510,8 @@ export default function PiecePage() {
                 isSection2Complete
                   ? 'bg-green-100 text-green-700 hover:bg-green-200'
                   : isSection1Complete
-                  ? 'bg-[#3c5e86] text-white'
-                  : 'bg-gray-100 text-[#8c8c8c] hover:bg-gray-200'
+                  ? 'bg-[#dcf0d6] text-[#286464]'
+                  : 'bg-[#f2f2f2] text-[#8c8c8c] hover:bg-[#dcdcdc]'
               }`}
             >
               <span
@@ -508,7 +519,7 @@ export default function PiecePage() {
                   isSection2Complete
                     ? 'bg-green-600 text-white'
                     : isSection1Complete
-                    ? 'bg-white text-[#3c5e86]'
+                    ? 'bg-[#286464] text-white'
                     : 'bg-[#8c8c8c] text-white'
                 }`}
               >
@@ -517,7 +528,7 @@ export default function PiecePage() {
               <span className="text-sm font-medium">Create Scenario</span>
             </button>
 
-            <div className="w-8 h-0.5 bg-gray-300" />
+            <div className="w-8 h-0.5 bg-[#bebebe]" />
 
             <button
               onClick={() => scrollToSection(section3Ref)}
@@ -525,8 +536,8 @@ export default function PiecePage() {
                 result
                   ? 'bg-green-100 text-green-700 hover:bg-green-200'
                   : isSection2Complete
-                  ? 'bg-[#3c5e86] text-white'
-                  : 'bg-gray-100 text-[#8c8c8c] hover:bg-gray-200'
+                  ? 'bg-[#fceec8] text-[#bc8e54]'
+                  : 'bg-[#f2f2f2] text-[#8c8c8c] hover:bg-[#dcdcdc]'
               }`}
             >
               <span
@@ -534,7 +545,7 @@ export default function PiecePage() {
                   result
                     ? 'bg-green-600 text-white'
                     : isSection2Complete
-                    ? 'bg-white text-[#3c5e86]'
+                    ? 'bg-[#bc8e54] text-white'
                     : 'bg-[#8c8c8c] text-white'
                 }`}
               >
@@ -546,12 +557,12 @@ export default function PiecePage() {
         </div>
       </div>
 
-      <div className="py-10" style={{ backgroundColor: '#f2f2f2' }}>
+      <div className="py-10">
         <div className="max-w-7xl mx-auto px-6 lg:px-8 space-y-12">
           {/* ═══════════════════════════════════════════════════════════════════════
               SECTION 1: DEFINE PORT BASELINE
              ═══════════════════════════════════════════════════════════════════════ */}
-          <div ref={section1Ref} className="scroll-mt-20">
+          <div ref={section1Ref} className="scroll-mt-36 bg-[#e8f8fc] rounded-2xl p-8 border border-[#d4eefa]">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-8 h-8 rounded-full bg-[#3c5e86] text-white flex items-center justify-center text-sm font-bold">
                 1
@@ -579,7 +590,7 @@ export default function PiecePage() {
                   <button
                     type="button"
                     onClick={addTerminal}
-                    className="px-4 py-2 rounded-lg bg-[#3c5e86] text-white text-xs font-semibold hover:bg-[#2a4566] transition-colors"
+                    className="px-4 py-2 rounded-lg bg-[#3c5e86] text-white text-xs font-semibold hover:bg-[#68a4c2] transition-colors"
                   >
                     + Add Terminal
                   </button>
@@ -603,9 +614,9 @@ export default function PiecePage() {
           {/* ═══════════════════════════════════════════════════════════════════════
               SECTION 2: CREATE ELECTRIFICATION SCENARIO
              ═══════════════════════════════════════════════════════════════════════ */}
-          <div ref={section2Ref} className="scroll-mt-20">
+          <div ref={section2Ref} className="scroll-mt-36 bg-[#eefae8] rounded-2xl p-8 border border-[#dcf0d6]">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-8 h-8 rounded-full bg-[#3c5e86] text-white flex items-center justify-center text-sm font-bold">
+              <div className="w-8 h-8 rounded-full bg-[#286464] text-white flex items-center justify-center text-sm font-bold">
                 2
               </div>
               <div>
@@ -637,9 +648,9 @@ export default function PiecePage() {
           {/* ═══════════════════════════════════════════════════════════════════════
               SECTION 3: RESULTS
              ═══════════════════════════════════════════════════════════════════════ */}
-          <div ref={section3Ref} className="scroll-mt-20">
+          <div ref={section3Ref} className="scroll-mt-36 bg-[#fcf8e4] rounded-2xl p-8 border border-[#fceec8]">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-8 h-8 rounded-full bg-[#3c5e86] text-white flex items-center justify-center text-sm font-bold">
+              <div className="w-8 h-8 rounded-full bg-[#bc8e54] text-white flex items-center justify-center text-sm font-bold">
                 3
               </div>
               <div>
@@ -648,17 +659,90 @@ export default function PiecePage() {
               </div>
             </div>
 
-            {/* Calculate button */}
-            <div className="flex justify-center mb-8">
-              <button
-                onClick={handleCalculate}
-                disabled={loading || !canCalculate}
-                className="text-white font-medium text-sm py-3 px-12 rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#2e4a6a]"
-                style={{ backgroundColor: '#3c5e86' }}
-              >
-                {loading ? 'Calculating...' : 'Calculate PIECE Analysis'}
-              </button>
+            {/* Calculate button + Save */}
+            <div className="flex flex-col items-center gap-2 mb-8">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleCalculate}
+                  disabled={loading || !canCalculate}
+                  className="text-white font-medium text-sm py-3 px-12 rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-[#414141] hover:bg-[#585858]"
+                >
+                  {loading ? 'Calculating...' : 'Calculate PIECE Analysis'}
+                </button>
+                {result && (
+                  <button
+                    onClick={() => {
+                      setSaveName(port.name ? `${port.name} scenario` : 'Untitled scenario')
+                      setShowSaveDialog(true)
+                    }}
+                    className="py-3 px-6 rounded-xl border border-[#bebebe] text-sm font-medium text-[#414141] hover:bg-white/60 transition-colors"
+                  >
+                    Save Scenario
+                  </button>
+                )}
+              </div>
+
+              {/* Assumption changed prompt */}
+              {resultsClearedByAssumptions && (
+                <p className="text-xs text-[#bc8e54] font-medium">
+                  Assumptions have changed &mdash; please recalculate
+                </p>
+              )}
+
+              {/* Custom assumptions info */}
+              {overrideSummary.length > 0 && (
+                <p className="text-[10px] text-[#8c8c8c]">
+                  Custom assumptions: {overrideSummary.map((s) =>
+                    `${OVERRIDE_TABLE_LABELS[s.table] ?? s.table} (${s.count})`
+                  ).join(', ')}
+                </p>
+              )}
             </div>
+
+            {/* Save dialog */}
+            {showSaveDialog && (
+              <div className="bg-white rounded-xl border border-[#dcdcdc] p-6 mb-6 max-w-md mx-auto">
+                <h4 className="text-sm font-semibold text-[#414141] mb-4">Save Scenario</h4>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-[#585858] mb-1">Name</label>
+                    <input
+                      type="text"
+                      value={saveName}
+                      onChange={(e) => setSaveName(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm text-[#414141] bg-white focus:border-[#68a4c2] focus:ring-2 focus:ring-[#d4eefa] focus:outline-none"
+                      placeholder="e.g. Rotterdam Hub - Full Electrification"
+                      autoFocus
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-[#585858] mb-1">Description (optional)</label>
+                    <input
+                      type="text"
+                      value={saveDescription}
+                      onChange={(e) => setSaveDescription(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm text-[#414141] bg-white focus:border-[#68a4c2] focus:ring-2 focus:ring-[#d4eefa] focus:outline-none"
+                      placeholder="Notes about this scenario..."
+                    />
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      onClick={handleSave}
+                      disabled={saving || !saveName.trim()}
+                      className="px-6 py-2 rounded-lg bg-[#414141] text-white text-sm font-medium hover:bg-[#585858] transition-colors disabled:opacity-40"
+                    >
+                      {saving ? 'Saving...' : 'Save'}
+                    </button>
+                    <button
+                      onClick={() => setShowSaveDialog(false)}
+                      className="px-4 py-2 rounded-lg text-sm text-[#8c8c8c] hover:text-[#414141] transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Error */}
             {error && (
@@ -672,16 +756,30 @@ export default function PiecePage() {
 
             {/* Empty state */}
             {!result && !error && canCalculate && (
-              <div className="bg-white rounded-2xl p-12 border border-[#dcdcdc] text-center">
-                <div className="text-[#bebebe] text-5xl mb-4">&#9889;</div>
-                <p className="text-sm text-[#8c8c8c]">
-                  Configure your baseline and scenario above, then click Calculate to see PIECE analysis
-                </p>
+              <div className="bg-white/70 rounded-2xl p-12 border border-[#fceec8] text-center">
+                {resultsClearedByAssumptions ? (
+                  <>
+                    <div className="text-[#bc8e54] text-5xl mb-4">&#9888;</div>
+                    <p className="text-sm text-[#414141] font-medium mb-1">
+                      Assumptions have been updated
+                    </p>
+                    <p className="text-xs text-[#8c8c8c]">
+                      Previous results were cleared. Click Calculate to run a new analysis with the updated assumptions.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-[#bebebe] text-5xl mb-4">&#9889;</div>
+                    <p className="text-sm text-[#8c8c8c]">
+                      Configure your baseline and scenario above, then click Calculate to see PIECE analysis
+                    </p>
+                  </>
+                )}
               </div>
             )}
 
             {!result && !error && !canCalculate && (
-              <div className="bg-white rounded-2xl p-12 border border-[#dcdcdc] text-center">
+              <div className="bg-white/70 rounded-2xl p-12 border border-[#fceec8] text-center">
                 <div className="text-[#bebebe] text-5xl mb-4">&#128203;</div>
                 <p className="text-sm text-[#8c8c8c]">
                   Please configure at least one terminal with throughput and equipment to enable calculation
@@ -694,6 +792,6 @@ export default function PiecePage() {
           </div>
         </div>
       </div>
-    </div>
+    </>
   )
 }

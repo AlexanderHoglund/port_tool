@@ -140,7 +140,7 @@ function CategoryGroup({
   onBaselineChange: (updated: Record<string, number>) => void
   onScenarioChange: (updated: Record<string, number>) => void
 }) {
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(false)
   const count = items.reduce(
     (s, m) => s + (baseline[m.key] || 0) + (scenario[m.key] || 0),
     0,

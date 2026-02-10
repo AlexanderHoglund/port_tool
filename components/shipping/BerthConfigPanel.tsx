@@ -129,7 +129,7 @@ export default function BerthConfigPanel({ berths, terminalType, onChange }: Pro
                         type="text"
                         value={berth.berth_name}
                         onChange={(e) => updateBerth(berth.id, { berth_name: e.target.value })}
-                        className="w-full px-2 py-1 rounded border border-gray-200 text-sm text-[#1a1a1a] bg-white focus:border-[#3c5e86] focus:ring-1 focus:ring-[#3c5e86] focus:outline-none"
+                        className="w-full px-2 py-1 rounded border border-gray-200 text-sm text-[#414141] bg-white focus:border-[#3c5e86] focus:ring-1 focus:ring-[#3c5e86] focus:outline-none"
                       />
                     </td>
                     <td className="py-2 px-2">
@@ -145,7 +145,7 @@ export default function BerthConfigPanel({ berths, terminalType, onChange }: Pro
                           }
                           updateBerth(berth.id, updates)
                         }}
-                        className="w-full px-2 py-1 rounded border border-gray-200 text-sm text-[#1a1a1a] bg-white focus:border-[#3c5e86] focus:ring-1 focus:ring-[#3c5e86] focus:outline-none font-medium"
+                        className="w-full px-2 py-1 rounded border border-gray-200 text-sm text-[#414141] bg-white focus:border-[#3c5e86] focus:ring-1 focus:ring-[#3c5e86] focus:outline-none font-medium"
                       >
                         {segments.map((s) => (
                           <option key={s.key} value={s.key}>{s.label}</option>
@@ -156,7 +156,7 @@ export default function BerthConfigPanel({ berths, terminalType, onChange }: Pro
                       <select
                         value={berth.current_vessel_segment_key}
                         onChange={(e) => updateBerth(berth.id, { current_vessel_segment_key: e.target.value })}
-                        className={`w-full px-2 py-1 rounded border text-sm text-[#1a1a1a] bg-white focus:border-[#3c5e86] focus:ring-1 focus:ring-[#3c5e86] focus:outline-none ${
+                        className={`w-full px-2 py-1 rounded border text-sm text-[#414141] bg-white focus:border-[#3c5e86] focus:ring-1 focus:ring-[#3c5e86] focus:outline-none ${
                           currentExceedsMax ? 'border-red-400' : 'border-gray-200'
                         }`}
                       >
@@ -174,7 +174,7 @@ export default function BerthConfigPanel({ berths, terminalType, onChange }: Pro
                         min={0}
                         value={berth.annual_calls || ''}
                         onChange={(e) => updateBerth(berth.id, { annual_calls: parseInt(e.target.value) || 0 })}
-                        className="w-full px-2 py-1 rounded border border-gray-200 text-sm text-center text-[#1a1a1a] bg-white focus:border-[#3c5e86] focus:ring-1 focus:ring-[#3c5e86] focus:outline-none"
+                        className="w-full px-2 py-1 rounded border border-gray-200 text-sm text-center text-[#414141] bg-white focus:border-[#3c5e86] focus:ring-1 focus:ring-[#3c5e86] focus:outline-none"
                       />
                     </td>
                     <td className="py-2 px-2">
@@ -184,7 +184,7 @@ export default function BerthConfigPanel({ berths, terminalType, onChange }: Pro
                         step={0.5}
                         value={berth.avg_berth_hours || ''}
                         onChange={(e) => updateBerth(berth.id, { avg_berth_hours: parseFloat(e.target.value) || 0 })}
-                        className="w-full px-2 py-1 rounded border border-gray-200 text-sm text-center text-[#1a1a1a] bg-white focus:border-[#3c5e86] focus:ring-1 focus:ring-[#3c5e86] focus:outline-none"
+                        className="w-full px-2 py-1 rounded border border-gray-200 text-sm text-center text-[#414141] bg-white focus:border-[#3c5e86] focus:ring-1 focus:ring-[#3c5e86] focus:outline-none"
                       />
                     </td>
                     <td className="py-2 px-2 text-center bg-[#eef5fc]">

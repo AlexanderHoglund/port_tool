@@ -191,8 +191,11 @@ export type PieceCalculationRequest = {
   // Port-level buildings & lighting (if not per-terminal)
   buildings_lighting?: BuildingsLightingConfig
 
-  // Override PIECE economic defaults
+  // Override PIECE economic defaults (legacy — prefer assumption_profile)
   economic_overrides?: Record<string, number>
+
+  // Assumption profile name for custom overrides (default = 'default')
+  assumption_profile?: string
 }
 
 export type CalculationRequest = {
@@ -396,6 +399,7 @@ export type PieceEquipmentRow = {
   kwh_per_teu: number
   liters_per_teu: number
   teu_ratio: number
+  moves_per_hour: number
   lifespan_years: number
   created_at?: string
 }
@@ -465,6 +469,20 @@ export type PieceAssumptions = {
   grid: PieceGridRow[]
   economic: EconomicAssumptionRow[]
 }
+
+// Override row from piece_assumption_overrides table
+export type PieceAssumptionOverride = {
+  id: string
+  profile_name: string
+  table_name: string
+  row_key: string
+  column_name: string
+  custom_value: number
+  created_at: string
+}
+
+// Nested map: { tableName: { rowKey: { columnName: value } } }
+export type OverrideMap = Record<string, Record<string, Record<string, number>>>
 
 // Combined assumptions (old + PIECE)
 export type AllPieceAssumptions = AllAssumptions & {
@@ -552,11 +570,16 @@ export type PieceGridResult = {
   gross_peak_demand_mw: number
   simultaneity_factor: number
   net_peak_demand_mw: number
+  transformer_rating_mw: number        // net_peak × growth(1.2) × safety(1.2)
   substation_type: string
-  substation_capex_usd: number
+  substation_material_capex_usd: number // 80% of substation cost
+  civil_works_capex_usd: number         // 20% of substation cost
+  substation_capex_usd: number          // material + civil works
   cable_length_m: number
   cable_type: string
   cable_capex_usd: number
+  grid_opex_usd: number                // (2×MW+200)/1000 M$/year
+  grid_consumption_kwh: number          // 7% of total annual kWh
   total_grid_capex_usd: number
 }
 
@@ -599,6 +622,7 @@ export type PieceTerminalResult = {
   berth_totals: {
     total_ops_capex_usd: number
     total_ops_opex_usd: number
+    total_ops_peak_mw: number
     baseline_diesel_liters: number
     baseline_co2_tons: number
     baseline_fuel_cost_usd: number

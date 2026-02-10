@@ -219,11 +219,11 @@ export default function PieceTerminalCard({
             value={terminal.name}
             onChange={(e) => onChange({ ...terminal, name: e.target.value })}
             onClick={(e) => e.stopPropagation()}
-            className="max-w-[180px] px-2 py-1 rounded border border-gray-300 font-semibold text-sm text-[#1a1a1a] bg-white focus:border-[#3c5e86] focus:outline-none"
+            className="max-w-[180px] px-2 py-1 rounded border border-gray-300 font-semibold text-sm text-[#414141] bg-white focus:border-[#3c5e86] focus:outline-none"
             placeholder="Terminal name"
           />
         ) : (
-          <span className="font-semibold text-sm text-[#1a1a1a]">{terminal.name}</span>
+          <span className="font-semibold text-sm text-[#414141]">{terminal.name}</span>
         )}
 
         {/* Terminal type dropdown (baseline) or badge (scenario) */}
@@ -258,7 +258,7 @@ export default function PieceTerminalCard({
               value={terminal.annual_teu || ''}
               onChange={(e) => onChange({ ...terminal, annual_teu: parseInt(e.target.value) || 0 })}
               placeholder={getThroughputPlaceholder(terminal.terminal_type)}
-              className="w-32 px-2 py-1 rounded border border-gray-300 text-xs text-[#1a1a1a] bg-white focus:border-[#3c5e86] focus:outline-none"
+              className="w-32 px-2 py-1 rounded border border-gray-300 text-xs text-[#414141] bg-white focus:border-[#3c5e86] focus:outline-none"
             />
           </div>
         ) : (
@@ -336,7 +336,7 @@ export default function PieceTerminalCard({
                 badge={berthCount > 0
                   ? `${berthCount} berth${berthCount !== 1 ? 's' : ''}${maxVesselLabel ? ` · Max: ${maxVesselLabel}` : ''}`
                   : undefined}
-                defaultOpen={true}
+                defaultOpen={false}
               >
                 <BerthConfigPanel
                   berths={terminal.berths}
@@ -353,7 +353,7 @@ export default function PieceTerminalCard({
                     ? `${baselineDieselCount} diesel + ${baselineElectricCount} electric`
                     : undefined
                 }
-                defaultOpen={true}
+                defaultOpen={false}
               >
                 <BaselineEquipmentTable
                   terminalType={terminal.terminal_type}
@@ -398,7 +398,7 @@ export default function PieceTerminalCard({
               <CollapsibleSection
                 title="Shore Power (OPS/DC)"
                 badge={totalOpsCount > 0 ? `${totalOpsCount}/${berthCount} berths with OPS` : undefined}
-                defaultOpen={true}
+                defaultOpen={false}
               >
                 <BerthScenarioPanel
                   berths={terminal.berths}
@@ -411,7 +411,7 @@ export default function PieceTerminalCard({
               {/* Onshore Equipment Changes */}
               <CollapsibleSection
                 title="Onshore Equipment Changes"
-                defaultOpen={true}
+                defaultOpen={false}
               >
                 <ScenarioEquipmentTable
                   terminalType={terminal.terminal_type}

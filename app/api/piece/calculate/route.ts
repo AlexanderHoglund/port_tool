@@ -20,7 +20,7 @@
 
 import { NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
-import { loadPieceAssumptions } from '@/lib/load-assumptions'
+import { loadPieceAssumptions, loadOverrides, mergeAssumptions } from '@/lib/load-assumptions'
 import { calculatePortPiece } from '@/lib/piece-engine'
 import type {
   PieceCalculationRequest,
@@ -484,6 +484,11 @@ function validateRequest(
     }
   }
 
+  // ── Assumption profile (optional) ──
+  const assumptionProfile = typeof req.assumption_profile === 'string'
+    ? req.assumption_profile
+    : undefined
+
   return {
     ok: true,
     data: {
@@ -497,6 +502,7 @@ function validateRequest(
       port_services_scenario: portServicesScenario,
       buildings_lighting: buildingsLighting,
       economic_overrides: economicOverrides,
+      assumption_profile: assumptionProfile,
     },
   }
 }
@@ -529,12 +535,18 @@ export async function POST(request: Request) {
 
     // 3. Load PIECE assumption data from Supabase (5 tables)
     const supabase = await createClient()
-    const assumptions = await loadPieceAssumptions(supabase)
+    const [defaults, overrideMap] = await Promise.all([
+      loadPieceAssumptions(supabase),
+      loadOverrides(supabase, calcRequest.assumption_profile ?? 'default'),
+    ])
 
-    // 4. Run PIECE calculation engine
+    // 4. Merge custom overrides into defaults (originals are never mutated)
+    const assumptions = mergeAssumptions(defaults, overrideMap)
+
+    // 5. Run PIECE calculation engine
     const result = calculatePortPiece(calcRequest, assumptions)
 
-    // 5. Return response
+    // 6. Return response
     return NextResponse.json({ success: true, result })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Internal server error'

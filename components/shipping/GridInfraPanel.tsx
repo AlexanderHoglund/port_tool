@@ -57,7 +57,7 @@ export default function GridInfraPanel({
           value={cableLengthM || ''}
           onChange={(e) => onCableLengthChange(parseInt(e.target.value) || 0)}
           placeholder="500"
-          className="w-40 px-3 py-2 rounded-lg border border-gray-200 text-sm text-[#1a1a1a] bg-white focus:border-[#3c5e86] focus:ring-1 focus:ring-[#3c5e86] focus:outline-none"
+          className="w-40 px-3 py-2 rounded-lg border border-gray-200 text-sm text-[#414141] bg-white focus:border-[#3c5e86] focus:ring-1 focus:ring-[#3c5e86] focus:outline-none"
         />
         <p className="text-[10px] text-[#8c8c8c]">
           Total cable length from grid connection point to equipment. Default: 500m.

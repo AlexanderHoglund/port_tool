@@ -90,7 +90,7 @@ function EquipmentRow({
               value={entry.existing_diesel || ''}
               placeholder="0"
               onChange={(e) => onChange({ ...entry, existing_diesel: parseQty(e.target.value) })}
-              className="w-full px-2 py-1.5 rounded border border-[#e0c9ad] text-sm text-center text-[#1a1a1a] bg-white focus:border-[#c9a87c] focus:outline-none"
+              className="w-full px-2 py-1.5 rounded border border-[#e0c9ad] text-sm text-center text-[#414141] bg-white focus:border-[#c9a87c] focus:outline-none"
             />
           )}
         </td>
@@ -103,7 +103,7 @@ function EquipmentRow({
             value={entry.existing_electric || ''}
             placeholder="0"
             onChange={(e) => onChange({ ...entry, existing_electric: parseQty(e.target.value) })}
-            className="w-full px-2 py-1.5 rounded border border-[#a8cde8] text-sm text-center text-[#1a1a1a] bg-white focus:border-[#5a95c0] focus:outline-none"
+            className="w-full px-2 py-1.5 rounded border border-[#a8cde8] text-sm text-center text-[#414141] bg-white focus:border-[#5a95c0] focus:outline-none"
           />
         </td>
 
@@ -142,7 +142,7 @@ function CategoryGroup({
   equipment: Record<string, BaselineEquipmentEntry>
   onChange: (updated: Record<string, BaselineEquipmentEntry>) => void
 }) {
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(false)
 
   // Calculate totals for this category
   const dieselCount = items.reduce((s, m) => s + (equipment[m.key]?.existing_diesel || 0), 0)

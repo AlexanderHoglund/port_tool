@@ -72,7 +72,7 @@ export default function BuildingsLightingPanel({ config, onChange }: Props) {
                     value={config.warehouse_sqm || ''}
                     placeholder="0"
                     onChange={(e) => onChange({ ...config, warehouse_sqm: parseNum(e.target.value) })}
-                    className="w-full px-2 py-1.5 rounded border border-gray-200 text-sm text-center text-[#1a1a1a] bg-white focus:border-[#3c5e86] focus:outline-none"
+                    className="w-full px-2 py-1.5 rounded border border-gray-200 text-sm text-center text-[#414141] bg-white focus:border-[#3c5e86] focus:outline-none"
                   />
                 </td>
                 <td className="py-2 px-3 text-center text-xs text-[#8c8c8c]">
@@ -94,7 +94,7 @@ export default function BuildingsLightingPanel({ config, onChange }: Props) {
                     value={config.office_sqm || ''}
                     placeholder="0"
                     onChange={(e) => onChange({ ...config, office_sqm: parseNum(e.target.value) })}
-                    className="w-full px-2 py-1.5 rounded border border-gray-200 text-sm text-center text-[#1a1a1a] bg-white focus:border-[#3c5e86] focus:outline-none"
+                    className="w-full px-2 py-1.5 rounded border border-gray-200 text-sm text-center text-[#414141] bg-white focus:border-[#3c5e86] focus:outline-none"
                   />
                 </td>
                 <td className="py-2 px-3 text-center text-xs text-[#8c8c8c]">
@@ -116,7 +116,7 @@ export default function BuildingsLightingPanel({ config, onChange }: Props) {
                     value={config.workshop_sqm || ''}
                     placeholder="0"
                     onChange={(e) => onChange({ ...config, workshop_sqm: parseNum(e.target.value) })}
-                    className="w-full px-2 py-1.5 rounded border border-gray-200 text-sm text-center text-[#1a1a1a] bg-white focus:border-[#3c5e86] focus:outline-none"
+                    className="w-full px-2 py-1.5 rounded border border-gray-200 text-sm text-center text-[#414141] bg-white focus:border-[#3c5e86] focus:outline-none"
                   />
                 </td>
                 <td className="py-2 px-3 text-center text-xs text-[#8c8c8c]">
@@ -170,7 +170,7 @@ export default function BuildingsLightingPanel({ config, onChange }: Props) {
                     value={config.high_mast_lights || ''}
                     placeholder="0"
                     onChange={(e) => onChange({ ...config, high_mast_lights: parseNum(e.target.value) })}
-                    className="w-full px-2 py-1.5 rounded border border-gray-200 text-sm text-center text-[#1a1a1a] bg-white focus:border-[#3c5e86] focus:outline-none"
+                    className="w-full px-2 py-1.5 rounded border border-gray-200 text-sm text-center text-[#414141] bg-white focus:border-[#3c5e86] focus:outline-none"
                   />
                 </td>
                 <td className="py-2 px-3 text-center text-xs text-[#8c8c8c]">
@@ -195,7 +195,7 @@ export default function BuildingsLightingPanel({ config, onChange }: Props) {
                     value={config.area_lights || ''}
                     placeholder="0"
                     onChange={(e) => onChange({ ...config, area_lights: parseNum(e.target.value) })}
-                    className="w-full px-2 py-1.5 rounded border border-gray-200 text-sm text-center text-[#1a1a1a] bg-white focus:border-[#3c5e86] focus:outline-none"
+                    className="w-full px-2 py-1.5 rounded border border-gray-200 text-sm text-center text-[#414141] bg-white focus:border-[#3c5e86] focus:outline-none"
                   />
                 </td>
                 <td className="py-2 px-3 text-center text-xs text-[#8c8c8c]">
@@ -220,7 +220,7 @@ export default function BuildingsLightingPanel({ config, onChange }: Props) {
                     value={config.roadway_lights || ''}
                     placeholder="0"
                     onChange={(e) => onChange({ ...config, roadway_lights: parseNum(e.target.value) })}
-                    className="w-full px-2 py-1.5 rounded border border-gray-200 text-sm text-center text-[#1a1a1a] bg-white focus:border-[#3c5e86] focus:outline-none"
+                    className="w-full px-2 py-1.5 rounded border border-gray-200 text-sm text-center text-[#414141] bg-white focus:border-[#3c5e86] focus:outline-none"
                   />
                 </td>
                 <td className="py-2 px-3 text-center text-xs text-[#8c8c8c]">
@@ -262,7 +262,7 @@ export default function BuildingsLightingPanel({ config, onChange }: Props) {
             value={config.annual_operating_hours || ''}
             placeholder="8760"
             onChange={(e) => onChange({ ...config, annual_operating_hours: parseNum(e.target.value, 8760) })}
-            className="w-24 px-2 py-1.5 rounded border border-gray-200 text-sm text-center text-[#1a1a1a] bg-white focus:border-[#3c5e86] focus:outline-none"
+            className="w-24 px-2 py-1.5 rounded border border-gray-200 text-sm text-center text-[#414141] bg-white focus:border-[#3c5e86] focus:outline-none"
           />
           <span className="text-[10px] text-[#8c8c8c]">
             (8760 = 24/7 operation, 4380 = 12h/day)

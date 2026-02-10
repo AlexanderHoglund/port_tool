@@ -100,7 +100,7 @@ function EquipmentRow({
               value={baselineQty || ''}
               placeholder="0"
               onChange={(e) => onBaselineChange(parseQty(e.target.value))}
-              className="w-full px-2 py-1.5 rounded border border-[#d4cfc8] text-sm text-center text-[#1a1a1a] bg-white focus:border-[#a89e92] focus:outline-none"
+              className="w-full px-2 py-1.5 rounded border border-[#d4cfc8] text-sm text-center text-[#414141] bg-white focus:border-[#a89e92] focus:outline-none"
             />
           </td>
         )}
@@ -114,7 +114,7 @@ function EquipmentRow({
               value={scenarioQty || ''}
               placeholder="0"
               onChange={(e) => onScenarioChange(parseQty(e.target.value))}
-              className="w-full px-2 py-1.5 rounded border border-[#b8daf0] text-sm text-center text-[#1a1a1a] bg-white focus:border-[#68a4c2] focus:outline-none"
+              className="w-full px-2 py-1.5 rounded border border-[#b8daf0] text-sm text-center text-[#414141] bg-white focus:border-[#68a4c2] focus:outline-none"
             />
           </td>
         )}
@@ -158,7 +158,7 @@ function CategoryGroup({
   showOnlyBaseline?: boolean
   showOnlyScenario?: boolean
 }) {
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(false)
   const count = items.reduce((s, m) => s + (baseline[m.key] || 0) + (scenario[m.key] || 0), 0)
   const showBoth = !showOnlyBaseline && !showOnlyScenario
 

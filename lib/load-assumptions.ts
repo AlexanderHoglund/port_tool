@@ -24,7 +24,16 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { AllAssumptions, PieceAssumptions, AllPieceAssumptions } from './types'
+import type { AllAssumptions, PieceAssumptions, AllPieceAssumptions, OverrideMap, PieceAssumptionOverride } from './types'
+
+// Maps each table to its unique row-key column name
+const TABLE_ROW_KEYS: Record<string, string> = {
+  economic_assumptions: 'assumption_key',
+  piece_equipment: 'equipment_key',
+  piece_evse: 'evse_key',
+  piece_fleet_ops: 'vessel_segment_key',
+  piece_grid: 'component_key',
+}
 
 export async function loadAllAssumptions(
   supabase: SupabaseClient,
@@ -128,3 +137,79 @@ export async function loadAllPieceAssumptions(
     piece,
   }
 }
+
+/**
+ * Load custom overrides for a given profile from piece_assumption_overrides.
+ * Returns a nested map: { tableName: { rowKey: { columnName: value } } }
+ */
+export async function loadOverrides(
+  supabase: SupabaseClient,
+  profileName: string = 'default',
+): Promise<OverrideMap> {
+  const { data, error } = await supabase
+    .from('piece_assumption_overrides')
+    .select('*')
+    .eq('profile_name', profileName)
+
+  if (error) {
+    throw new Error(`Failed to load overrides: ${error.message}`)
+  }
+
+  const map: OverrideMap = {}
+  for (const row of (data ?? []) as PieceAssumptionOverride[]) {
+    if (!map[row.table_name]) map[row.table_name] = {}
+    if (!map[row.table_name][row.row_key]) map[row.table_name][row.row_key] = {}
+    map[row.table_name][row.row_key][row.column_name] = row.custom_value
+  }
+  return map
+}
+
+/**
+ * Apply overrides to a row array. Each row is cloned and numeric fields
+ * are replaced if a matching override exists.
+ */
+function applyOverridesToRows<T extends Record<string, unknown>>(
+  rows: T[],
+  tableName: string,
+  overrides: OverrideMap,
+): T[] {
+  const tableOverrides = overrides[tableName]
+  if (!tableOverrides) return rows
+
+  const keyColumn = TABLE_ROW_KEYS[tableName]
+  if (!keyColumn) return rows
+
+  return rows.map((row) => {
+    const rowKey = String(row[keyColumn])
+    const rowOverrides = tableOverrides[rowKey]
+    if (!rowOverrides) return row
+
+    const merged = { ...row }
+    for (const [col, val] of Object.entries(rowOverrides)) {
+      if (col in merged) {
+        ;(merged as Record<string, unknown>)[col] = val
+      }
+    }
+    return merged
+  })
+}
+
+/**
+ * Merge overrides into a PieceAssumptions bundle.
+ * Returns a new object — originals are not mutated.
+ */
+export function mergeAssumptions(
+  defaults: PieceAssumptions,
+  overrides: OverrideMap,
+): PieceAssumptions {
+  return {
+    equipment: applyOverridesToRows(defaults.equipment, 'piece_equipment', overrides),
+    evse: applyOverridesToRows(defaults.evse, 'piece_evse', overrides),
+    fleetOps: applyOverridesToRows(defaults.fleetOps, 'piece_fleet_ops', overrides),
+    grid: applyOverridesToRows(defaults.grid, 'piece_grid', overrides),
+    economic: applyOverridesToRows(defaults.economic, 'economic_assumptions', overrides),
+  }
+}
+
+/** Re-export TABLE_ROW_KEYS for use by the Assumptions page */
+export { TABLE_ROW_KEYS }

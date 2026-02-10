@@ -79,7 +79,14 @@ function TerminalDetailCard({ terminal }: { terminal: PieceTerminalResult }) {
           </div>
           <div className="text-right">
             <div className="text-[10px] text-[#8c8c8c]">OPEX Savings</div>
-            <div className="text-green-600 font-semibold">{formatCurrency(terminal.annual_opex_savings_usd)}</div>
+            <div className={`font-semibold ${
+              terminal.annual_opex_savings_usd >= 0 ? 'text-green-600' : 'text-amber-600'
+            }`}>
+              {terminal.annual_opex_savings_usd >= 0
+                ? formatCurrency(terminal.annual_opex_savings_usd)
+                : `+${formatCurrency(Math.abs(terminal.annual_opex_savings_usd))}`
+              }
+            </div>
           </div>
           <div className="text-right">
             <div className="text-[10px] text-[#8c8c8c]">CAPEX</div>
@@ -245,8 +252,16 @@ export default function PieceResultsSection({ result }: Props) {
         />
         <SummaryCard
           label="Annual OPEX Savings"
-          value={formatCurrency(totals.annual_opex_savings_usd)}
-          subtext="annual savings"
+          value={
+            totals.annual_opex_savings_usd >= 0
+              ? formatCurrency(totals.annual_opex_savings_usd)
+              : formatCurrency(Math.abs(totals.annual_opex_savings_usd))
+          }
+          subtext={
+            totals.annual_opex_savings_usd >= 0
+              ? 'annual savings'
+              : 'annual increase'
+          }
         />
         <SummaryCard
           label="Simple Payback"

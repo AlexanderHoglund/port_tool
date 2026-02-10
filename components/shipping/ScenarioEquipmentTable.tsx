@@ -121,7 +121,7 @@ function EquipmentRow({
                 value={scenarioEntry.num_to_convert || ''}
                 placeholder="0"
                 onChange={(e) => onChange({ ...scenarioEntry, num_to_convert: parseQty(e.target.value) })}
-                className={`w-full px-2 py-1.5 rounded border text-sm text-center text-[#1a1a1a] bg-white focus:outline-none ${
+                className={`w-full px-2 py-1.5 rounded border text-sm text-center text-[#414141] bg-white focus:outline-none ${
                   convertWarning
                     ? 'border-red-400 focus:border-red-500'
                     : 'border-[#e0c9ad] focus:border-[#c9a87c]'
@@ -144,7 +144,7 @@ function EquipmentRow({
             value={scenarioEntry.num_to_add || ''}
             placeholder="0"
             onChange={(e) => onChange({ ...scenarioEntry, num_to_add: parseQty(e.target.value) })}
-            className="w-full px-2 py-1.5 rounded border border-[#b4d9b6] text-sm text-center text-[#1a1a1a] bg-white focus:border-[#4caf50] focus:outline-none"
+            className="w-full px-2 py-1.5 rounded border border-[#b4d9b6] text-sm text-center text-[#414141] bg-white focus:border-[#4caf50] focus:outline-none"
           />
         </td>
 
@@ -202,7 +202,7 @@ function CategoryGroup({
   scenario: Record<string, ScenarioEquipmentEntry>
   onChange: (updated: Record<string, ScenarioEquipmentEntry>) => void
 }) {
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(false)
 
   // Calculate category totals
   let totalConvert = 0
