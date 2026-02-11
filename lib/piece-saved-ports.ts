@@ -118,6 +118,37 @@ export async function savePort(params: {
   return data.id
 }
 
+// ── Update (overwrite existing) ─────────────────────────
+
+export async function updateSavedPort(id: string, params: {
+  scenario_name: string
+  description?: string
+  port: PortConfig
+  terminals: PieceTerminalConfig[]
+  result: PiecePortResult | null
+  assumption_hash?: string
+}): Promise<void> {
+  const supabase = createClient()
+  const { error } = await supabase
+    .from('piece_saved_ports')
+    .update({
+      scenario_name: params.scenario_name,
+      description: params.description ?? null,
+      port_name: params.port.name,
+      port_location: params.port.location,
+      port_size_key: params.port.size_key,
+      terminal_count: params.terminals.length,
+      port_config: params.port,
+      terminals_config: params.terminals,
+      result: params.result,
+      assumption_hash: params.assumption_hash ?? null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+
+  if (error) throw new Error(`Failed to update: ${error.message}`)
+}
+
 // ── Delete ───────────────────────────────────────────────
 
 export async function deleteSavedPort(id: string): Promise<void> {

@@ -11,7 +11,7 @@ type Props = {
 
 // OPS power and CAPEX by vessel segment
 // Infrastructure is sized for max vessel → CAPEX uses max_vessel_segment_key
-// Current energy use → OPEX uses current_vessel_segment_key
+// Energy use is computed from vessel_calls in the engine
 const OPS_DATA: Record<string, { powerMw: number; capexUsd: number }> = {
   // Container
   container_0_3k: { powerMw: 2.0, capexUsd: 754000 },
@@ -19,7 +19,7 @@ const OPS_DATA: Record<string, { powerMw: number; capexUsd: number }> = {
   container_6_10k: { powerMw: 6.0, capexUsd: 1482000 },
   container_10k_plus: { powerMw: 7.5, capexUsd: 1755000 },
   // Cruise
-  cruise_0_25k: { powerMw: 4.6, capexUsd: 1227000 },
+  cruise_0_25k: { powerMw: 4.6, capexUsd: 1227200 },
   cruise_25_100k: { powerMw: 12.0, capexUsd: 2574000 },
   cruise_100_175k: { powerMw: 20.0, capexUsd: 4030000 },
   cruise_175k_plus: { powerMw: 26.0, capexUsd: 5122000 },
@@ -28,9 +28,6 @@ const OPS_DATA: Record<string, { powerMw: number; capexUsd: number }> = {
   roro_4_7k: { powerMw: 4.0, capexUsd: 1118000 },
   roro_7k_plus: { powerMw: 6.5, capexUsd: 1573000 },
 }
-
-// DC charging CAPEX (simplified - per berth)
-const DC_CAPEX_PER_BERTH = 500000 // $500K per DC installation
 
 // Vessel segment display names
 const SEGMENT_NAMES: Record<string, string> = {
@@ -66,11 +63,8 @@ export default function BerthScenarioPanel({ berths, scenarios, onChange }: Prop
 
   // Calculate totals
   // CAPEX / infrastructure MW uses max_vessel_segment_key
-  // Current operational MW uses current_vessel_segment_key
   let totalDesignMw = 0
-  let totalCurrentMw = 0
   let totalOpsCapex = 0
-  let totalDcCapex = 0
   let opsExistingCount = 0
   let opsNewCount = 0
   let dcExistingCount = 0
@@ -79,15 +73,12 @@ export default function BerthScenarioPanel({ berths, scenarios, onChange }: Prop
   for (const berth of berths) {
     const scenario = getScenario(berth.id)
     const maxData = OPS_DATA[berth.max_vessel_segment_key] ?? { powerMw: 2.0, capexUsd: 754000 }
-    const currentData = OPS_DATA[berth.current_vessel_segment_key] ?? { powerMw: 2.0, capexUsd: 754000 }
 
     if (berth.ops_existing) {
       totalDesignMw += maxData.powerMw
-      totalCurrentMw += currentData.powerMw
       opsExistingCount++
     } else if (scenario.ops_enabled) {
       totalDesignMw += maxData.powerMw
-      totalCurrentMw += currentData.powerMw
       totalOpsCapex += maxData.capexUsd  // CAPEX sized for max vessel
       opsNewCount++
     }
@@ -95,7 +86,6 @@ export default function BerthScenarioPanel({ berths, scenarios, onChange }: Prop
     if (berth.dc_existing) {
       dcExistingCount++
     } else if (scenario.dc_enabled) {
-      totalDcCapex += DC_CAPEX_PER_BERTH
       dcNewCount++
     }
   }
@@ -128,7 +118,7 @@ export default function BerthScenarioPanel({ berths, scenarios, onChange }: Prop
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-[11px] text-[#666]">
-          <strong>Design MW</strong> and <strong>CAPEX</strong> are sized for max vessel capacity. <strong>Current MW</strong> reflects today&apos;s operational use.
+          <strong>Design MW</strong> and <strong>CAPEX</strong> are sized for max vessel capacity.
         </p>
         <button
           type="button"
@@ -146,8 +136,9 @@ export default function BerthScenarioPanel({ berths, scenarios, onChange }: Prop
               <th className="text-left py-3 px-3 text-[11px] font-bold uppercase text-[#666] w-10">#</th>
               <th className="text-left py-3 px-3 text-[11px] font-bold uppercase text-[#666]">Berth</th>
               <th className="text-left py-3 px-3 text-[11px] font-bold uppercase text-[#666]">
-                Max / Current
+                Max Vessel
               </th>
+              <th className="text-center py-3 px-3 text-[11px] font-bold uppercase text-[#666] w-20">Calls/Yr</th>
               <th className="text-center py-3 px-3 text-[11px] font-bold uppercase bg-[#dceefa] text-[#0d47a1] w-14">
                 OPS
               </th>
@@ -156,25 +147,19 @@ export default function BerthScenarioPanel({ berths, scenarios, onChange }: Prop
                 Design MW
                 <span className="block text-[9px] font-normal text-[#999]">(max vessel)</span>
               </th>
-              <th className="text-center py-3 px-3 text-[11px] font-bold uppercase text-[#666] w-20">
-                Current MW
-                <span className="block text-[9px] font-normal text-[#999]">(operating)</span>
-              </th>
               <th className="text-center py-3 px-3 text-[11px] font-bold uppercase text-[#666] w-24">OPS CAPEX</th>
               <th className="text-center py-3 px-3 text-[11px] font-bold uppercase bg-[#ffe0b2] text-[#bf360c] w-14">
                 DC
               </th>
               <th className="text-center py-3 px-3 text-[11px] font-bold uppercase text-[#666] w-14">Status</th>
-              <th className="text-center py-3 px-3 text-[11px] font-bold uppercase text-[#666] w-24">DC CAPEX</th>
             </tr>
           </thead>
           <tbody>
             {berths.map((berth) => {
               const scenario = getScenario(berth.id)
               const maxData = OPS_DATA[berth.max_vessel_segment_key] ?? { powerMw: 2.0, capexUsd: 754000 }
-              const currentData = OPS_DATA[berth.current_vessel_segment_key] ?? { powerMw: 2.0, capexUsd: 754000 }
               const maxLabel = SEGMENT_NAMES[berth.max_vessel_segment_key] ?? berth.max_vessel_segment_key
-              const currentLabel = SEGMENT_NAMES[berth.current_vessel_segment_key] ?? berth.current_vessel_segment_key
+              const berthTotalCalls = berth.vessel_calls.reduce((s, c) => s + c.annual_calls, 0)
 
               const hasOps = berth.ops_existing || scenario.ops_enabled
               const opsIsNew = !berth.ops_existing && scenario.ops_enabled
@@ -190,9 +175,11 @@ export default function BerthScenarioPanel({ berths, scenarios, onChange }: Prop
                   </td>
                   <td className="py-2 px-3 text-xs">
                     <div className="text-[#333] font-medium">{maxLabel}</div>
-                    {maxLabel !== currentLabel && (
-                      <div className="text-[#888] text-[10px]">operating: {currentLabel}</div>
-                    )}
+                  </td>
+
+                  {/* Calls/Yr summary */}
+                  <td className="py-2 px-3 text-center text-xs text-[#555]">
+                    {berthTotalCalls.toLocaleString()}
                   </td>
 
                   {/* OPS checkbox */}
@@ -224,15 +211,6 @@ export default function BerthScenarioPanel({ berths, scenarios, onChange }: Prop
                   <td className="py-2 px-3 text-center text-xs">
                     {hasOps ? (
                       <span className="text-[#0d47a1] font-semibold">{maxData.powerMw}</span>
-                    ) : (
-                      <span className="text-[#bbb]">—</span>
-                    )}
-                  </td>
-
-                  {/* Current MW (from operating vessel) */}
-                  <td className="py-2 px-3 text-center text-xs">
-                    {hasOps ? (
-                      <span className="text-[#555] font-medium">{currentData.powerMw}</span>
                     ) : (
                       <span className="text-[#bbb]">—</span>
                     )}
@@ -274,23 +252,13 @@ export default function BerthScenarioPanel({ berths, scenarios, onChange }: Prop
                     )}
                   </td>
 
-                  {/* DC CAPEX */}
-                  <td className="py-2 px-3 text-center text-xs">
-                    {berth.dc_existing ? (
-                      <span className="text-[#999]">$0</span>
-                    ) : dcIsNew ? (
-                      <span className="text-[#333] font-medium">${(DC_CAPEX_PER_BERTH / 1000).toLocaleString()}K</span>
-                    ) : (
-                      <span className="text-[#bbb]">—</span>
-                    )}
-                  </td>
                 </tr>
               )
             })}
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-gray-200 bg-[#f5f5f5]">
-              <td colSpan={3} className="py-3 px-3 text-right text-[11px] font-semibold text-[#666]">
+              <td colSpan={4} className="py-3 px-3 text-right text-[11px] font-semibold text-[#666]">
                 Totals:
               </td>
               <td className="py-3 px-3 text-center text-xs font-bold text-[#0d47a1] bg-[#dceefa]">
@@ -304,9 +272,6 @@ export default function BerthScenarioPanel({ berths, scenarios, onChange }: Prop
               <td className="py-3 px-3 text-center text-xs font-bold text-[#0d47a1]">
                 {totalDesignMw.toFixed(1)} MW
               </td>
-              <td className="py-3 px-3 text-center text-xs font-medium text-[#555]">
-                {totalCurrentMw.toFixed(1)} MW
-              </td>
               <td className="py-3 px-3 text-center text-xs font-bold text-[#333]">
                 ${(totalOpsCapex / 1000000).toFixed(2)}M
               </td>
@@ -318,9 +283,6 @@ export default function BerthScenarioPanel({ berths, scenarios, onChange }: Prop
                 {dcExistingCount > 0 && dcNewCount > 0 && ' + '}
                 {dcNewCount > 0 && <span className="text-[#bf360c] font-semibold">{dcNewCount} new</span>}
               </td>
-              <td className="py-3 px-3 text-center text-xs font-bold text-[#333]">
-                ${(totalDcCapex / 1000000).toFixed(2)}M
-              </td>
             </tr>
           </tfoot>
         </table>
@@ -330,7 +292,7 @@ export default function BerthScenarioPanel({ berths, scenarios, onChange }: Prop
         <div className="bg-[#eef5fc] rounded-lg p-3 border border-[#c5ddf0]">
           <div className="font-bold text-[#0d47a1] mb-1">OPS (Onshore Power Supply)</div>
           <p>Infrastructure sized for max vessel capacity. Design MW and CAPEX reflect the largest vessel the berth can handle.
-          Current MW shows actual power draw based on today&apos;s operating segment.</p>
+          Energy consumption is calculated from the vessel call mix defined in the Baseline section.</p>
         </div>
         <div className="bg-[#fff5ec] rounded-lg p-3 border border-[#ffd6a5]">
           <div className="font-bold text-[#bf360c] mb-1">DC (Fast Charging)</div>

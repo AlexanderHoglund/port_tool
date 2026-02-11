@@ -15,13 +15,7 @@ function formatNumber(n: number, decimals = 0): string {
 }
 
 function formatCurrency(n: number): string {
-  if (Math.abs(n) >= 1000000) {
-    return `$${(n / 1000000).toFixed(2)}M`
-  }
-  if (Math.abs(n) >= 1000) {
-    return `$${(n / 1000).toFixed(0)}K`
-  }
-  return `$${n.toFixed(0)}`
+  return '$' + Math.round(n).toLocaleString()
 }
 
 function SummaryCard({
@@ -29,26 +23,52 @@ function SummaryCard({
   value,
   subtext,
   highlight = false,
+  danger = false,
+  success = false,
 }: {
   label: string
   value: string
   subtext?: string
   highlight?: boolean
+  danger?: boolean
+  success?: boolean
 }) {
+  const bg = danger
+    ? 'bg-[#feeeea] border border-[#fac8c2]'
+    : success
+      ? 'bg-[#eefae8] border border-[#c2e6b8]'
+      : highlight
+        ? 'bg-[#3c5e86] text-white'
+        : 'bg-white border border-gray-200'
+
+  const labelColor = danger
+    ? 'text-[#9e5858]'
+    : success
+      ? 'text-[#3a7a3a]'
+      : highlight ? 'text-[#a8c8e0]' : 'text-[#8c8c8c]'
+
+  const valueColor = danger
+    ? 'text-[#9e5858]'
+    : success
+      ? 'text-[#2d6a2d]'
+      : highlight ? 'text-white' : 'text-[#414141]'
+
+  const subtextColor = danger
+    ? 'text-[#c07070]'
+    : success
+      ? 'text-[#5a9a5a]'
+      : highlight ? 'text-[#c8dff0]' : 'text-[#8c8c8c]'
+
   return (
-    <div
-      className={`rounded-xl p-5 ${
-        highlight ? 'bg-[#3c5e86] text-white' : 'bg-white border border-gray-200'
-      }`}
-    >
-      <div className={`text-[10px] font-bold uppercase tracking-wide ${highlight ? 'text-[#a8c8e0]' : 'text-[#8c8c8c]'}`}>
+    <div className={`rounded-xl p-5 ${bg}`}>
+      <div className={`text-[10px] font-bold uppercase tracking-wide ${labelColor}`}>
         {label}
       </div>
-      <div className={`text-2xl font-light mt-1 ${highlight ? 'text-white' : 'text-[#414141]'}`}>
+      <div className={`text-2xl font-light mt-1 ${valueColor}`}>
         {value}
       </div>
       {subtext && (
-        <div className={`text-xs mt-1 ${highlight ? 'text-[#c8dff0]' : 'text-[#8c8c8c]'}`}>
+        <div className={`text-xs mt-1 ${subtextColor}`}>
           {subtext}
         </div>
       )}
@@ -170,16 +190,20 @@ function TerminalDetailCard({ terminal }: { terminal: PieceTerminalResult }) {
           {/* Berths */}
           {terminal.berths.length > 0 && (
             <div>
-              <h4 className="text-[10px] font-bold uppercase text-[#8c8c8c] mb-2">Berth Infrastructure (OPS)</h4>
+              <h4 className="text-[10px] font-bold uppercase text-[#8c8c8c] mb-2">Berth Infrastructure (OPS & DC)</h4>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-200">
                       <th className="text-left py-1 text-[10px] text-[#8c8c8c]">Berth</th>
-                      <th className="text-left py-1 text-[10px] text-[#8c8c8c]">Segment</th>
+                      <th className="text-left py-1 text-[10px] text-[#8c8c8c]">Max Segment</th>
+                      <th className="text-center py-1 text-[10px] text-[#8c8c8c]">Calls/Yr</th>
                       <th className="text-center py-1 text-[10px] text-[#8c8c8c]">OPS</th>
-                      <th className="text-center py-1 text-[10px] text-[#8c8c8c]">MW</th>
-                      <th className="text-right py-1 text-[10px] text-[#8c8c8c]">CAPEX</th>
+                      <th className="text-center py-1 text-[10px] text-[#8c8c8c]">OPS MW</th>
+                      <th className="text-right py-1 text-[10px] text-[#8c8c8c]">OPS CAPEX</th>
+                      <th className="text-center py-1 text-[10px] text-[#8c8c8c]">DC</th>
+                      <th className="text-center py-1 text-[10px] text-[#8c8c8c]">DC MW</th>
+                      <th className="text-right py-1 text-[10px] text-[#8c8c8c]">DC CAPEX</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -187,16 +211,22 @@ function TerminalDetailCard({ terminal }: { terminal: PieceTerminalResult }) {
                       <tr key={b.berth_id} className="border-b border-gray-100">
                         <td className="py-1 text-[#585858]">{b.berth_name}</td>
                         <td className="py-1 text-[#8c8c8c]">{b.max_vessel_segment_name}</td>
+                        <td className="py-1 text-center text-[#8c8c8c]">{b.total_annual_calls.toLocaleString()}</td>
                         <td className="py-1 text-center">{b.ops_enabled ? '✓' : '-'}</td>
                         <td className="py-1 text-center">{b.ops_enabled ? b.ops_power_mw.toFixed(1) : '-'}</td>
                         <td className="py-1 text-right">{formatCurrency(b.ops_total_capex_usd)}</td>
+                        <td className="py-1 text-center">{b.dc_enabled ? '✓' : '-'}</td>
+                        <td className="py-1 text-center">{b.dc_enabled ? b.dc_power_mw.toFixed(1) : '-'}</td>
+                        <td className="py-1 text-right">{formatCurrency(b.dc_capex_usd)}</td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
                     <tr className="font-semibold">
-                      <td colSpan={4}></td>
+                      <td colSpan={5}></td>
                       <td className="py-1 text-right">{formatCurrency(terminal.berth_totals.total_ops_capex_usd)}</td>
+                      <td colSpan={2}></td>
+                      <td className="py-1 text-right">{formatCurrency(terminal.berth_totals.total_dc_capex_usd)}</td>
                     </tr>
                   </tfoot>
                 </table>
@@ -247,11 +277,11 @@ export default function PieceResultsSection({ result }: Props) {
         />
         <SummaryCard
           label="Diesel Saved"
-          value={`${formatNumber(totals.diesel_liters_saved / 1000000, 1)}M L`}
+          value={`${formatNumber(totals.diesel_liters_saved)} L`}
           subtext="annual litres avoided"
         />
         <SummaryCard
-          label="Annual OPEX Savings"
+          label="Annual OPEX Change"
           value={
             totals.annual_opex_savings_usd >= 0
               ? formatCurrency(totals.annual_opex_savings_usd)
@@ -260,8 +290,10 @@ export default function PieceResultsSection({ result }: Props) {
           subtext={
             totals.annual_opex_savings_usd >= 0
               ? 'annual savings'
-              : 'annual increase'
+              : 'annual cost increase'
           }
+          danger={totals.annual_opex_savings_usd < 0}
+          success={totals.annual_opex_savings_usd >= 0}
         />
         <SummaryCard
           label="Simple Payback"
@@ -275,7 +307,7 @@ export default function PieceResultsSection({ result }: Props) {
         <h3 className="text-[11px] font-bold uppercase tracking-widest text-[#8c8c8c] mb-4">
           CAPEX Breakdown
         </h3>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
           <div>
             <div className="text-[10px] text-[#8c8c8c]">Equipment</div>
             <div className="text-lg font-semibold text-[#414141]">{formatCurrency(totals.equipment_capex_usd)}</div>
@@ -289,8 +321,16 @@ export default function PieceResultsSection({ result }: Props) {
             <div className="text-lg font-semibold text-[#414141]">{formatCurrency(totals.ops_capex_usd)}</div>
           </div>
           <div>
+            <div className="text-[10px] text-[#8c8c8c]">DC Infrastructure</div>
+            <div className="text-lg font-semibold text-[#414141]">{formatCurrency(totals.dc_capex_usd)}</div>
+          </div>
+          <div>
             <div className="text-[10px] text-[#8c8c8c]">Grid</div>
             <div className="text-lg font-semibold text-[#414141]">{formatCurrency(totals.grid_capex_usd)}</div>
+          </div>
+          <div>
+            <div className="text-[10px] text-[#8c8c8c]">Port Services</div>
+            <div className="text-lg font-semibold text-[#414141]">{formatCurrency(totals.port_services_capex_usd)}</div>
           </div>
           <div className="bg-[#fafafa] rounded-lg p-3 -m-1">
             <div className="text-[10px] text-[#3c5e86] font-bold">TOTAL CAPEX</div>
@@ -308,7 +348,7 @@ export default function PieceResultsSection({ result }: Props) {
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-[#7a7267]">Diesel:</span>
-              <span className="text-[#414141] font-semibold">{formatNumber(totals.baseline_diesel_liters / 1000000, 2)}M L/year</span>
+              <span className="text-[#414141] font-semibold">{formatNumber(totals.baseline_diesel_liters)} L/year</span>
             </div>
             <div className="flex justify-between">
               <span className="text-[#7a7267]">Electricity:</span>
@@ -332,7 +372,7 @@ export default function PieceResultsSection({ result }: Props) {
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-[#5a8ab5]">Diesel:</span>
-              <span className="text-[#414141] font-semibold">{formatNumber(totals.scenario_diesel_liters / 1000000, 2)}M L/year</span>
+              <span className="text-[#414141] font-semibold">{formatNumber(totals.scenario_diesel_liters)} L/year</span>
             </div>
             <div className="flex justify-between">
               <span className="text-[#5a8ab5]">Electricity:</span>

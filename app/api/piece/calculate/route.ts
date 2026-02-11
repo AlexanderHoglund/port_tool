@@ -27,6 +27,7 @@ import type {
   PieceTerminalConfig,
   TerminalType,
   BerthDefinition,
+  BerthVesselCall,
   BerthScenarioConfig,
   BaselineEquipmentEntry,
   ScenarioEquipmentEntry,
@@ -57,6 +58,16 @@ function validatePortServicesBaseline(
     }
   }
 
+  // Optional avg hours per call (default 2 in engine)
+  const tugAvgHours = s.tug_avg_hours_per_call
+  if (tugAvgHours !== undefined && (typeof tugAvgHours !== 'number' || tugAvgHours < 0)) {
+    return { ok: false, error: `${fieldName}.tug_avg_hours_per_call must be a non-negative number.` }
+  }
+  const pilotAvgHours = s.pilot_avg_hours_per_call
+  if (pilotAvgHours !== undefined && (typeof pilotAvgHours !== 'number' || pilotAvgHours < 0)) {
+    return { ok: false, error: `${fieldName}.pilot_avg_hours_per_call must be a non-negative number.` }
+  }
+
   return {
     ok: true,
     data: {
@@ -64,6 +75,8 @@ function validatePortServicesBaseline(
       tugs_electric: s.tugs_electric as number,
       pilot_boats_diesel: s.pilot_boats_diesel as number,
       pilot_boats_electric: s.pilot_boats_electric as number,
+      tug_avg_hours_per_call: tugAvgHours as number | undefined,
+      pilot_avg_hours_per_call: pilotAvgHours as number | undefined,
     },
   }
 }
@@ -95,6 +108,43 @@ function validatePortServicesScenario(
   }
 }
 
+function validateVesselCall(
+  call: unknown,
+  callIndex: number,
+  berthPrefix: string
+): { ok: true; data: BerthVesselCall } | { ok: false; error: string } {
+  const prefix = `${berthPrefix}.vessel_calls[${callIndex}]`
+
+  if (!call || typeof call !== 'object') {
+    return { ok: false, error: `${prefix} must be an object.` }
+  }
+
+  const c = call as Record<string, unknown>
+
+  if (typeof c.id !== 'string' || !c.id) {
+    return { ok: false, error: `${prefix}.id must be a non-empty string.` }
+  }
+  if (typeof c.vessel_segment_key !== 'string' || !c.vessel_segment_key) {
+    return { ok: false, error: `${prefix}.vessel_segment_key must be a non-empty string.` }
+  }
+  if (typeof c.annual_calls !== 'number' || c.annual_calls < 0) {
+    return { ok: false, error: `${prefix}.annual_calls must be non-negative.` }
+  }
+  if (typeof c.avg_berth_hours !== 'number' || c.avg_berth_hours < 0) {
+    return { ok: false, error: `${prefix}.avg_berth_hours must be non-negative.` }
+  }
+
+  return {
+    ok: true,
+    data: {
+      id: c.id,
+      vessel_segment_key: c.vessel_segment_key,
+      annual_calls: c.annual_calls,
+      avg_berth_hours: c.avg_berth_hours,
+    },
+  }
+}
+
 function validateBerthDefinition(
   berth: unknown,
   index: number,
@@ -120,14 +170,18 @@ function validateBerthDefinition(
   if (typeof b.max_vessel_segment_key !== 'string' || !b.max_vessel_segment_key) {
     return { ok: false, error: `${prefix}.max_vessel_segment_key must be a non-empty string.` }
   }
-  if (typeof b.current_vessel_segment_key !== 'string' || !b.current_vessel_segment_key) {
-    return { ok: false, error: `${prefix}.current_vessel_segment_key must be a non-empty string.` }
+
+  // Validate vessel_calls array
+  if (!Array.isArray(b.vessel_calls)) {
+    return { ok: false, error: `${prefix}.vessel_calls must be an array.` }
   }
-  if (typeof b.annual_calls !== 'number' || b.annual_calls < 0) {
-    return { ok: false, error: `${prefix}.annual_calls must be non-negative.` }
-  }
-  if (typeof b.avg_berth_hours !== 'number' || b.avg_berth_hours < 0) {
-    return { ok: false, error: `${prefix}.avg_berth_hours must be non-negative.` }
+  const vesselCalls: BerthVesselCall[] = []
+  for (let i = 0; i < b.vessel_calls.length; i++) {
+    const callValidation = validateVesselCall(b.vessel_calls[i], i, prefix)
+    if (!callValidation.ok) {
+      return { ok: false, error: callValidation.error }
+    }
+    vesselCalls.push(callValidation.data)
   }
 
   return {
@@ -137,9 +191,7 @@ function validateBerthDefinition(
       berth_number: b.berth_number,
       berth_name: b.berth_name,
       max_vessel_segment_key: b.max_vessel_segment_key,
-      current_vessel_segment_key: b.current_vessel_segment_key,
-      annual_calls: b.annual_calls,
-      avg_berth_hours: b.avg_berth_hours,
+      vessel_calls: vesselCalls,
       ops_existing: !!b.ops_existing,
       dc_existing: !!b.dc_existing,
     },

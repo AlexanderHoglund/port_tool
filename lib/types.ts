@@ -21,15 +21,21 @@ export type BaselineEquipmentEntry = {
   existing_electric: number  // e.g., 2 already electric tractors
 }
 
+/** Individual vessel call entry within a berth (multiple vessel types can call at one berth) */
+export type BerthVesselCall = {
+  id: string
+  vessel_segment_key: string
+  annual_calls: number
+  avg_berth_hours: number
+}
+
 /** Berth definition for baseline (physical berth + traffic + existing infrastructure) */
 export type BerthDefinition = {
   id: string
   berth_number: number
   berth_name: string
   max_vessel_segment_key: string       // Design capacity — largest vessel the berth can handle (drives CAPEX, cable sizing)
-  current_vessel_segment_key: string   // Current operations — vessel segment served today (drives OPEX, energy)
-  annual_calls: number
-  avg_berth_hours: number
+  vessel_calls: BerthVesselCall[]      // Multiple vessel types calling at this berth (drives OPEX, energy)
   ops_existing: boolean        // Does this berth already have OPS infrastructure?
   dc_existing: boolean         // Does this berth already have DC charging infrastructure?
 }
@@ -48,12 +54,14 @@ export type BuildingsLightingConfig = {
   annual_operating_hours: number  // Default: 8760 (24/7)
 }
 
-/** Port services baseline: existing diesel and electric counts */
+/** Port services baseline: existing diesel and electric counts + operation parameters */
 export type PortServicesBaseline = {
   tugs_diesel: number
   tugs_electric: number
   pilot_boats_diesel: number
   pilot_boats_electric: number
+  tug_avg_hours_per_call?: number      // Avg tug operation hours per vessel call (default 4)
+  pilot_avg_hours_per_call?: number    // Avg pilot operation hours per vessel call (default 4)
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -201,6 +209,114 @@ export type PieceCalculationRequest = {
 export type CalculationRequest = {
   port: PortConfig
   terminals: TerminalConfig[]
+}
+
+// ═══════════════════════════════════════════════════════════
+// PROJECT / SCENARIO TYPES — Multi-scenario architecture
+// ═══════════════════════════════════════════════════════════
+
+/** Baseline berth definition WITHOUT vessel_calls (those are scenario-specific) */
+export type BaselineBerthDefinition = {
+  id: string
+  berth_number: number
+  berth_name: string
+  max_vessel_segment_key: string
+  ops_existing: boolean
+  dc_existing: boolean
+}
+
+/** Per-terminal baseline stored at project level */
+export type BaselineTerminalConfig = {
+  id: string
+  name: string
+  terminal_type: TerminalType
+  berths: BaselineBerthDefinition[]
+  baseline_equipment: Record<string, BaselineEquipmentEntry>
+  cable_length_m?: number
+  port_services_baseline?: PortServicesBaseline
+}
+
+/** Project-level baseline blob (stored as JSONB in piece_projects.baseline_config) */
+export type ProjectBaseline = {
+  terminals: BaselineTerminalConfig[]
+}
+
+/** Per-terminal scenario data (keyed by terminal_id) */
+export type ScenarioTerminalConfig = {
+  terminal_id: string
+  annual_teu: number
+  annual_passengers?: number
+  annual_ceu?: number
+  vessel_calls_by_berth: Record<string, BerthVesselCall[]>
+  scenario_equipment: Record<string, ScenarioEquipmentEntry>
+  berth_scenarios: BerthScenarioConfig[]
+  charger_overrides?: Record<string, number>
+  port_services_scenario?: PortServicesScenario
+}
+
+/** Scenario-level data blob (stored as JSONB in piece_scenarios.scenario_config) */
+export type ScenarioConfig = {
+  terminals: ScenarioTerminalConfig[]
+}
+
+/** Summary type for project list views */
+export type ProjectSummary = {
+  id: string
+  project_name: string
+  description: string | null
+  port_name: string
+  port_location: string
+  port_size_key: string
+  terminal_count: number
+  scenario_count: number
+  created_at: string
+  updated_at: string
+}
+
+/** Summary type for scenario list views */
+export type ScenarioSummary = {
+  id: string
+  project_id: string
+  scenario_name: string
+  description: string | null
+  sort_order: number
+  assumption_profile: string
+  has_result: boolean
+  total_capex_usd?: number
+  co2_reduction_percent?: number
+  annual_opex_savings_usd?: number
+  created_at: string
+  updated_at: string
+}
+
+/** Full project row from DB */
+export type ProjectRow = {
+  id: string
+  project_name: string
+  description: string | null
+  port_name: string
+  port_location: string
+  port_size_key: string
+  terminal_count: number
+  port_config: PortConfig
+  baseline_config: ProjectBaseline
+  created_at: string
+  updated_at: string
+}
+
+/** Full scenario row from DB */
+export type ScenarioRow = {
+  id: string
+  project_id: string
+  scenario_name: string
+  description: string | null
+  sort_order: number
+  scenario_config: ScenarioConfig
+  result: PiecePortResult | null
+  assumption_profile: string
+  assumption_hash: string | null
+  created_at: string
+  updated_at: string
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -419,7 +535,7 @@ export type PieceEvseRow = {
 export type PieceFleetOpsRow = {
   id: string
   vessel_segment_key: string
-  terminal_type_key: TerminalType
+  terminal_type_key: string  // TerminalType | 'port_services'
   display_name: string
   ops_power_mw: number
   transformer_capex_usd: number
@@ -427,7 +543,14 @@ export type PieceFleetOpsRow = {
   civil_works_capex_usd: number
   annual_opex_usd: number
   typical_berth_hours: number
+  typical_sail_hours: number
   tugs_per_call: number
+  pilots_per_call: number
+  hfo_consumption_mt_per_day: number  // For service boats: fuel rate in L/h (MID_CONS)
+  avg_hours_per_call: number          // Avg operation hours per vessel call (tugs/pilots)
+  dc_power_mw?: number               // DC charger power (MW) for electric vessel charging
+  dc_capex_usd?: number              // DC charger CAPEX per berth
+  dc_annual_opex_usd?: number        // DC charger annual OPEX per berth
   created_at?: string
 }
 
@@ -532,16 +655,30 @@ export type PieceChargerLineItem = {
   total_annual_opex_usd: number
 }
 
+export type PieceBerthVesselCallLineItem = {
+  vessel_segment_key: string
+  vessel_segment_name: string
+  annual_calls: number
+  avg_berth_hours: number
+  annual_berth_hours: number
+  ops_power_mw: number
+  shore_power_mwh: number
+  baseline_co2_tons: number
+  scenario_shore_power_kwh: number
+  scenario_co2_tons: number
+  scenario_energy_cost_usd: number
+}
+
 export type PieceBerthLineItem = {
   berth_id: string
   berth_name: string
   berth_number: number
   max_vessel_segment_key: string       // Design capacity (drives CAPEX, cable sizing)
   max_vessel_segment_name: string
-  current_vessel_segment_key: string   // Current operations (drives OPEX, energy)
-  current_vessel_segment_name: string
-  annual_calls: number
-  avg_berth_hours: number
+  // Aggregated from vessel_calls
+  total_annual_calls: number
+  total_annual_berth_hours: number
+  vessel_calls: PieceBerthVesselCallLineItem[]
   ops_enabled: boolean
   dc_enabled: boolean
   // OPS infrastructure
@@ -551,6 +688,10 @@ export type PieceBerthLineItem = {
   ops_civil_works_capex_usd: number
   ops_total_capex_usd: number
   ops_annual_opex_usd: number
+  // DC charging infrastructure
+  dc_power_mw: number
+  dc_capex_usd: number
+  dc_annual_opex_usd: number
   // At-berth emissions (baseline = all diesel, scenario = OPS fraction)
   baseline_berth_hours: number
   baseline_diesel_liters: number
@@ -581,6 +722,51 @@ export type PieceGridResult = {
   grid_opex_usd: number                // (2×MW+200)/1000 M$/year
   grid_consumption_kwh: number          // 7% of total annual kWh
   total_grid_capex_usd: number
+}
+
+export type PiecePortServicesResult = {
+  // Operation demand (derived from vessel calls across all terminals)
+  total_tug_trips: number
+  total_tug_hours: number
+  total_pilot_trips: number
+  total_pilot_hours: number
+  // Fleet sizing
+  min_tugs_required: number
+  min_pilots_required: number
+  max_tugs_per_call: number
+  max_pilots_per_call: number
+  // Baseline fleet & energy
+  baseline_tugs_diesel: number
+  baseline_tugs_electric: number
+  baseline_pilots_diesel: number
+  baseline_pilots_electric: number
+  baseline_tug_fuel_liters: number
+  baseline_tug_energy_kwh: number
+  baseline_pilot_fuel_liters: number
+  baseline_pilot_energy_kwh: number
+  baseline_co2_tons: number
+  baseline_fuel_cost_usd: number
+  baseline_energy_cost_usd: number
+  baseline_ops_maintenance_usd: number
+  baseline_total_opex_usd: number
+  // Scenario fleet & energy
+  scenario_tugs_diesel: number
+  scenario_tugs_electric: number
+  scenario_pilots_diesel: number
+  scenario_pilots_electric: number
+  scenario_tug_fuel_liters: number
+  scenario_tug_energy_kwh: number
+  scenario_pilot_fuel_liters: number
+  scenario_pilot_energy_kwh: number
+  scenario_co2_tons: number
+  scenario_fuel_cost_usd: number
+  scenario_energy_cost_usd: number
+  scenario_ops_maintenance_usd: number
+  scenario_total_opex_usd: number
+  // CAPEX (new OPS charging infrastructure for converted/added electric boats)
+  tug_ops_capex_usd: number
+  pilot_ops_capex_usd: number
+  total_ops_capex_usd: number
 }
 
 export type PieceTerminalResult = {
@@ -623,6 +809,9 @@ export type PieceTerminalResult = {
     total_ops_capex_usd: number
     total_ops_opex_usd: number
     total_ops_peak_mw: number
+    total_dc_capex_usd: number
+    total_dc_opex_usd: number
+    total_dc_peak_mw: number
     baseline_diesel_liters: number
     baseline_co2_tons: number
     baseline_fuel_cost_usd: number
@@ -646,6 +835,7 @@ export type PieceTerminalResult = {
 export type PiecePortResult = {
   port: PortConfig
   terminals: PieceTerminalResult[]
+  port_services?: PiecePortServicesResult
   totals: {
     // Baseline totals
     baseline_diesel_liters: number
@@ -663,7 +853,9 @@ export type PiecePortResult = {
     equipment_capex_usd: number
     charger_capex_usd: number
     ops_capex_usd: number
+    dc_capex_usd: number
     grid_capex_usd: number
+    port_services_capex_usd: number
     total_capex_usd: number
 
     // Delta metrics

@@ -8,7 +8,7 @@ import { PieceProvider } from './context/PieceContext'
 const NAV_ITEMS = [
   { href: '/piece', label: 'Dashboard', exact: true },
   { href: '/piece/assumptions', label: 'Assumptions', exact: false },
-  { href: '/piece/saved', label: 'Saved Ports', exact: false },
+  { href: '/piece/projects', label: 'Projects', exact: false },
   { href: '/piece/about', label: 'About', exact: false },
 ]
 

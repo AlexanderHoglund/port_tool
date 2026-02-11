@@ -22,13 +22,17 @@ import type {
   PieceEquipmentLineItem,
   PieceChargerLineItem,
   PieceBerthLineItem,
+  PieceBerthVesselCallLineItem,
   PieceGridResult,
   PieceTerminalResult,
   PiecePortResult,
+  PiecePortServicesResult,
   BerthDefinition,
   BerthScenarioConfig,
   BaselineEquipmentEntry,
   ScenarioEquipmentEntry,
+  PortServicesBaseline,
+  PortServicesScenario,
 } from './types'
 
 // ═══════════════════════════════════════════════════════════
@@ -458,6 +462,9 @@ export function calculateBerthInfrastructure(
     total_ops_capex_usd: number
     total_ops_opex_usd: number
     total_ops_peak_mw: number
+    total_dc_capex_usd: number
+    total_dc_opex_usd: number
+    total_dc_peak_mw: number
     baseline_diesel_liters: number
     baseline_co2_tons: number
     baseline_fuel_cost_usd: number
@@ -485,6 +492,9 @@ export function calculateBerthInfrastructure(
   let totalOpsCapex = 0
   let totalOpsOpex = 0
   let totalOpsPeakMw = 0
+  let totalDcCapex = 0
+  let totalDcOpex = 0
+  let totalDcPeakMw = 0
   let totalBaselineDiesel = 0
   let totalBaselineCo2 = 0
   let totalBaselineFuelCost = 0
@@ -497,10 +507,6 @@ export function calculateBerthInfrastructure(
     // CAPEX & infrastructure sizing uses MAX vessel segment (design capacity)
     const maxFleetRow = fleetOps.find(
       (f) => f.vessel_segment_key === berth.max_vessel_segment_key
-    )
-    // Current operations lookup — drives energy/OPEX calculations
-    const currentFleetRow = fleetOps.find(
-      (f) => f.vessel_segment_key === berth.current_vessel_segment_key
     )
 
     // Default values if segment not found — all sized to MAX vessel
@@ -515,31 +521,72 @@ export function calculateBerthInfrastructure(
       ? transformerCapex + converterCapex + civilWorksCapex
       : 0
 
-    // ── OPS Energy: P_OPS × T_ALONGSIDE × annual_calls ──
-    // This is the shore power energy that replaces vessel auxiliary engine HFO
-    const shorePowerMwh = opsPowerMw * berth.avg_berth_hours * berth.annual_calls
-    const shorePowerKwh = shorePowerMwh * 1000
+    // DC charging infrastructure (sized to max vessel segment)
+    const dcPowerMw = maxFleetRow?.dc_power_mw ?? 0
+    const dcCapexUsd = maxFleetRow?.dc_capex_usd ?? 0
+    const dcAnnualOpex = maxFleetRow?.dc_annual_opex_usd ?? 0
 
-    // Annual berth hours (for display)
-    const annualBerthHours = berth.annual_calls * berth.avg_berth_hours
+    // DC CAPEX only for NEW installations (not existing)
+    const berth_dc_capex = (!berth.dc_existing && berth.dc_enabled) ? dcCapexUsd : 0
+    const berth_dc_opex = berth.dc_enabled ? dcAnnualOpex : 0
 
-    // Baseline emissions: vessel burns HFO at berth
-    // If berth already has OPS (ops_existing), baseline uses shore power → grid emissions
-    // Otherwise, vessel runs auxiliary engines → vessel_aux_ef emissions
-    const baselineCo2Tons = shorePowerMwh * vesselAuxEfPerMwh
+    // ── Iterate vessel_calls to compute energy/emissions per call type ──
+    const callLineItems: PieceBerthVesselCallLineItem[] = []
+    let berthTotalCalls = 0
+    let berthTotalBerthHours = 0
+    let berthTotalShorePowerMwh = 0
+    let berthBaselineCo2 = 0
+    let berthScenarioShorePowerKwh = 0
+    let berthScenarioCo2 = 0
+    let berthScenarioEnergyCost = 0
 
-    // Scenario: OPS-enabled berths use shore power from grid
-    let scenarioShorePowerKwh = 0
-    let scenarioCo2Tons = 0
-    let scenarioEnergyCost = 0
+    for (const call of berth.vessel_calls) {
+      const callFleetRow = fleetOps.find(
+        (f) => f.vessel_segment_key === call.vessel_segment_key
+      )
+      const callOpsPowerMw = callFleetRow?.ops_power_mw ?? opsPowerMw
 
-    if (berth.ops_enabled) {
-      scenarioShorePowerKwh = shorePowerKwh
-      scenarioCo2Tons = (scenarioShorePowerKwh * gridEf) / 1000
-      scenarioEnergyCost = scenarioShorePowerKwh * electricityPrice
-    } else {
-      // No OPS — vessel still uses auxiliary engines
-      scenarioCo2Tons = baselineCo2Tons
+      const callBerthHours = call.annual_calls * call.avg_berth_hours
+      const callShorePowerMwh = callOpsPowerMw * call.avg_berth_hours * call.annual_calls
+      const callShorePowerKwh = callShorePowerMwh * 1000
+
+      // Baseline: vessel burns HFO at berth
+      const callBaselineCo2 = callShorePowerMwh * vesselAuxEfPerMwh
+
+      // Scenario: OPS-enabled → shore power from grid, otherwise vessel diesel
+      let callScenarioShorePowerKwh = 0
+      let callScenarioCo2 = 0
+      let callScenarioEnergyCost = 0
+
+      if (berth.ops_enabled) {
+        callScenarioShorePowerKwh = callShorePowerKwh
+        callScenarioCo2 = (callScenarioShorePowerKwh * gridEf) / 1000
+        callScenarioEnergyCost = callScenarioShorePowerKwh * electricityPrice
+      } else {
+        callScenarioCo2 = callBaselineCo2
+      }
+
+      callLineItems.push({
+        vessel_segment_key: call.vessel_segment_key,
+        vessel_segment_name: callFleetRow?.display_name ?? call.vessel_segment_key,
+        annual_calls: call.annual_calls,
+        avg_berth_hours: call.avg_berth_hours,
+        annual_berth_hours: callBerthHours,
+        ops_power_mw: callOpsPowerMw,
+        shore_power_mwh: callShorePowerMwh,
+        baseline_co2_tons: callBaselineCo2,
+        scenario_shore_power_kwh: callScenarioShorePowerKwh,
+        scenario_co2_tons: callScenarioCo2,
+        scenario_energy_cost_usd: callScenarioEnergyCost,
+      })
+
+      berthTotalCalls += call.annual_calls
+      berthTotalBerthHours += callBerthHours
+      berthTotalShorePowerMwh += callShorePowerMwh
+      berthBaselineCo2 += callBaselineCo2
+      berthScenarioShorePowerKwh += callScenarioShorePowerKwh
+      berthScenarioCo2 += callScenarioCo2
+      berthScenarioEnergyCost += callScenarioEnergyCost
     }
 
     const lineItem: PieceBerthLineItem = {
@@ -548,10 +595,9 @@ export function calculateBerthInfrastructure(
       berth_number: berth.berth_number,
       max_vessel_segment_key: berth.max_vessel_segment_key,
       max_vessel_segment_name: maxFleetRow?.display_name ?? berth.max_vessel_segment_key,
-      current_vessel_segment_key: berth.current_vessel_segment_key,
-      current_vessel_segment_name: currentFleetRow?.display_name ?? berth.current_vessel_segment_key,
-      annual_calls: berth.annual_calls,
-      avg_berth_hours: berth.avg_berth_hours,
+      total_annual_calls: berthTotalCalls,
+      total_annual_berth_hours: berthTotalBerthHours,
+      vessel_calls: callLineItems,
       ops_enabled: berth.ops_enabled,
       dc_enabled: berth.dc_enabled,
       ops_power_mw: opsPowerMw,
@@ -560,15 +606,18 @@ export function calculateBerthInfrastructure(
       ops_civil_works_capex_usd: berth.ops_enabled ? civilWorksCapex : 0,
       ops_total_capex_usd: berth_ops_capex,
       ops_annual_opex_usd: berth.ops_enabled ? opsAnnualOpex : 0,
-      baseline_berth_hours: annualBerthHours,
+      dc_power_mw: berth.dc_enabled ? dcPowerMw : 0,
+      dc_capex_usd: berth_dc_capex,
+      dc_annual_opex_usd: berth_dc_opex,
+      baseline_berth_hours: berthTotalBerthHours,
       baseline_diesel_liters: 0, // OPS model uses MWh, not liters
-      baseline_co2_tons: baselineCo2Tons,
+      baseline_co2_tons: berthBaselineCo2,
       baseline_fuel_cost_usd: 0,
       scenario_diesel_liters: 0,
-      scenario_shore_power_kwh: scenarioShorePowerKwh,
-      scenario_co2_tons: scenarioCo2Tons,
+      scenario_shore_power_kwh: berthScenarioShorePowerKwh,
+      scenario_co2_tons: berthScenarioCo2,
       scenario_fuel_cost_usd: 0,
-      scenario_energy_cost_usd: scenarioEnergyCost,
+      scenario_energy_cost_usd: berthScenarioEnergyCost,
     }
 
     lineItems.push(lineItem)
@@ -579,10 +628,15 @@ export function calculateBerthInfrastructure(
       totalOpsOpex += opsAnnualOpex
       totalOpsPeakMw += opsPowerMw
     }
-    totalBaselineCo2 += baselineCo2Tons
-    totalScenarioShorePower += scenarioShorePowerKwh
-    totalScenarioCo2 += scenarioCo2Tons
-    totalScenarioCost += scenarioEnergyCost
+    if (berth.dc_enabled) {
+      totalDcCapex += berth_dc_capex
+      totalDcOpex += berth_dc_opex
+      totalDcPeakMw += dcPowerMw
+    }
+    totalBaselineCo2 += berthBaselineCo2
+    totalScenarioShorePower += berthScenarioShorePowerKwh
+    totalScenarioCo2 += berthScenarioCo2
+    totalScenarioCost += berthScenarioEnergyCost
   }
 
   return {
@@ -591,6 +645,9 @@ export function calculateBerthInfrastructure(
       total_ops_capex_usd: totalOpsCapex,
       total_ops_opex_usd: totalOpsOpex,
       total_ops_peak_mw: totalOpsPeakMw,
+      total_dc_capex_usd: totalDcCapex,
+      total_dc_opex_usd: totalDcOpex,
+      total_dc_peak_mw: totalDcPeakMw,
       baseline_diesel_liters: 0, // OPS model uses MWh-based emissions, not liters
       baseline_co2_tons: totalBaselineCo2,
       baseline_fuel_cost_usd: 0,
@@ -707,6 +764,223 @@ export function calculateGridInfra(
     grid_opex_usd: gridOpexUsd,
     grid_consumption_kwh: gridConsumptionKwh,
     total_grid_capex_usd: totalGridCapex,
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// PORT SERVICES (TUG & PILOT BOAT) CALCULATIONS
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Calculate port services (tug and pilot boat) energy, emissions, and costs.
+ *
+ * Excel model reference: MD_TERMINAL_B columns T-W, rows 108-140, DOCUMENTATION rows 358-368.
+ *
+ * Key formulas:
+ *   tug_hours = Σ(annual_calls × tugs_per_call × (T_SAIL_tug + T_ALONG_tug))
+ *   pilot_hours = Σ(annual_calls × pilots_per_call × (T_SAIL_pilot + T_ALONG_pilot))
+ *   min_fleet = MAX(ROUNDUP(total_hours / (365 × 24 × 0.6)), max_per_call)
+ *
+ * Service boat parameters come from piece_fleet_ops rows 'tug_70bp' and 'pilot_boat'.
+ * Tugs/pilots per call come from each vessel segment's piece_fleet_ops row.
+ *
+ * Diesel boats: fuel = diesel_fraction × trips × fuel_rate × trip_duration
+ * Electric boats: energy = electric_fraction × trips × P_OPS × T_ALONG (charging at berth)
+ * CAPEX: OPS charging infrastructure per converted/added electric boat
+ */
+export function calculatePortServices(
+  terminals: PieceTerminalConfig[],
+  baseline: PortServicesBaseline,
+  scenario: PortServicesScenario,
+  fleetOps: PieceFleetOpsRow[],
+  economicMap: Record<string, number>,
+): PiecePortServicesResult {
+  // ── Service boat parameters from DB ──
+  const tugRow = fleetOps.find((f) => f.vessel_segment_key === 'tug_70bp')
+  const pilotRow = fleetOps.find((f) => f.vessel_segment_key === 'pilot_boat')
+
+  // Avg hours per call — from DB assumption (editable in Assumptions tab), synced to dashboard
+  const tugHoursPerCall = tugRow?.avg_hours_per_call ?? 4
+  const pilotHoursPerCall = pilotRow?.avg_hours_per_call ?? 4
+
+  const tugFuelRate = tugRow?.hfo_consumption_mt_per_day ?? 5  // L/h (MID_CONS)
+  const tugOpsPowerMw = tugRow?.ops_power_mw ?? 0.3
+  const tugAlongHours = tugRow?.typical_berth_hours ?? 2  // T_ALONG (for OPS charging calc)
+
+  const pilotFuelRate = pilotRow?.hfo_consumption_mt_per_day ?? 1  // L/h (MID_CONS)
+  const pilotOpsPowerMw = pilotRow?.ops_power_mw ?? 0.1
+  const pilotAlongHours = pilotRow?.typical_berth_hours ?? 1  // T_ALONG (for OPS charging calc)
+
+  // OPS CAPEX per charging berth (transformer + converter + civil works)
+  const tugOpsCapexPerBerth =
+    (tugRow?.transformer_capex_usd ?? 180000) +
+    (tugRow?.converter_capex_usd ?? 69000) +
+    (tugRow?.civil_works_capex_usd ?? 120600)
+  const pilotOpsCapexPerBerth =
+    (pilotRow?.transformer_capex_usd ?? 160000) +
+    (pilotRow?.converter_capex_usd ?? 63000) +
+    (pilotRow?.civil_works_capex_usd ?? 120200)
+
+  // Annual OPS maintenance per electric boat
+  const tugOpsOpexPerBoat = tugRow?.annual_opex_usd ?? 10000
+  const pilotOpsOpexPerBoat = pilotRow?.annual_opex_usd ?? 10000
+
+  // Economic assumptions
+  const dieselPrice = economicMap['diesel_price'] ?? 1.23
+  const electricityPrice = economicMap['electricity_price'] ?? 0.12
+  const dieselEfWtw = economicMap['diesel_ef_wtw'] ?? 3.28564  // kgCO2e/L WTW
+  const gridEf = economicMap['grid_ef'] ?? 0  // kgCO2/kWh
+
+  // ── Step 1: Calculate tug/pilot demand from vessel calls across all terminals ──
+  let totalTugTrips = 0
+  let totalPilotTrips = 0
+  let maxTugsPerCall = 0
+  let maxPilotsPerCall = 0
+
+  for (const terminal of terminals) {
+    for (const berth of terminal.berths) {
+      for (const call of berth.vessel_calls) {
+        const segmentRow = fleetOps.find(
+          (f) => f.vessel_segment_key === call.vessel_segment_key
+        )
+        const tugsNeeded = segmentRow?.tugs_per_call ?? 1
+        const pilotsNeeded = segmentRow?.pilots_per_call ?? 1
+
+        totalTugTrips += call.annual_calls * tugsNeeded
+        totalPilotTrips += call.annual_calls * pilotsNeeded
+
+        maxTugsPerCall = Math.max(maxTugsPerCall, tugsNeeded)
+        maxPilotsPerCall = Math.max(maxPilotsPerCall, pilotsNeeded)
+      }
+    }
+  }
+
+  const totalTugHours = totalTugTrips * tugHoursPerCall
+  const totalPilotHours = totalPilotTrips * pilotHoursPerCall
+
+  // ── Step 2: Fleet sizing (minimum required) ──
+  // ROUNDUP(total_hours / (365 × 24 × 0.6)), but at least max_per_call
+  const availableHoursPerBoat = 365 * 24 * 0.6  // 5,256 h/year at 60% utilization
+
+  const minTugsRequired = Math.max(
+    Math.ceil(totalTugHours / availableHoursPerBoat),
+    maxTugsPerCall,
+  )
+  const minPilotsRequired = Math.max(
+    Math.ceil(totalPilotHours / availableHoursPerBoat),
+    maxPilotsPerCall,
+  )
+
+  // ── Step 3: Baseline fleet composition ──
+  const blTugsDiesel = baseline.tugs_diesel
+  const blTugsElectric = baseline.tugs_electric
+  const blTugsTotal = blTugsDiesel + blTugsElectric
+  const blPilotsDiesel = baseline.pilot_boats_diesel
+  const blPilotsElectric = baseline.pilot_boats_electric
+  const blPilotsTotal = blPilotsDiesel + blPilotsElectric
+
+  // ── Step 4: Scenario fleet composition ──
+  const convertedTugs = Math.min(scenario.tugs_to_convert, blTugsDiesel)
+  const scTugsDiesel = blTugsDiesel - convertedTugs
+  const scTugsElectric = blTugsElectric + convertedTugs + scenario.tugs_to_add
+  const scTugsTotal = scTugsDiesel + scTugsElectric
+
+  const convertedPilots = Math.min(scenario.pilot_boats_to_convert, blPilotsDiesel)
+  const scPilotsDiesel = blPilotsDiesel - convertedPilots
+  const scPilotsElectric = blPilotsElectric + convertedPilots + scenario.pilot_boats_to_add
+  const scPilotsTotal = scPilotsDiesel + scPilotsElectric
+
+  // ── Step 5: Baseline energy & emissions ──
+  // Trips split proportionally across diesel/electric fleet
+  const blTugDieselFrac = blTugsTotal > 0 ? blTugsDiesel / blTugsTotal : 1
+  const blTugElectricFrac = blTugsTotal > 0 ? blTugsElectric / blTugsTotal : 0
+  const blPilotDieselFrac = blPilotsTotal > 0 ? blPilotsDiesel / blPilotsTotal : 1
+  const blPilotElectricFrac = blPilotsTotal > 0 ? blPilotsElectric / blPilotsTotal : 0
+
+  // Diesel fuel: fraction × total_trips × fuel_rate_L_per_h × trip_hours
+  const blTugFuelL = blTugDieselFrac * totalTugTrips * tugFuelRate * tugHoursPerCall
+  const blPilotFuelL = blPilotDieselFrac * totalPilotTrips * pilotFuelRate * pilotHoursPerCall
+
+  // Electric energy: fraction × total_trips × P_OPS_MW × T_ALONG_h × 1000 (kWh)
+  const blTugEnergyKwh = blTugElectricFrac * totalTugTrips * tugOpsPowerMw * tugAlongHours * 1000
+  const blPilotEnergyKwh = blPilotElectricFrac * totalPilotTrips * pilotOpsPowerMw * pilotAlongHours * 1000
+
+  // CO2
+  const blDieselCo2 = ((blTugFuelL + blPilotFuelL) * dieselEfWtw) / 1000
+  const blElectricCo2 = ((blTugEnergyKwh + blPilotEnergyKwh) * gridEf) / 1000
+  const blTotalCo2 = blDieselCo2 + blElectricCo2
+
+  // Costs
+  const blFuelCost = (blTugFuelL + blPilotFuelL) * dieselPrice
+  const blEnergyCost = (blTugEnergyKwh + blPilotEnergyKwh) * electricityPrice
+  const blOpsMaintenance = blTugsElectric * tugOpsOpexPerBoat + blPilotsElectric * pilotOpsOpexPerBoat
+  const blTotalOpex = blFuelCost + blEnergyCost + blOpsMaintenance
+
+  // ── Step 6: Scenario energy & emissions ──
+  const scTugDieselFrac = scTugsTotal > 0 ? scTugsDiesel / scTugsTotal : 0
+  const scTugElectricFrac = scTugsTotal > 0 ? scTugsElectric / scTugsTotal : 0
+  const scPilotDieselFrac = scPilotsTotal > 0 ? scPilotsDiesel / scPilotsTotal : 0
+  const scPilotElectricFrac = scPilotsTotal > 0 ? scPilotsElectric / scPilotsTotal : 0
+
+  const scTugFuelL = scTugDieselFrac * totalTugTrips * tugFuelRate * tugHoursPerCall
+  const scPilotFuelL = scPilotDieselFrac * totalPilotTrips * pilotFuelRate * pilotHoursPerCall
+
+  const scTugEnergyKwh = scTugElectricFrac * totalTugTrips * tugOpsPowerMw * tugAlongHours * 1000
+  const scPilotEnergyKwh = scPilotElectricFrac * totalPilotTrips * pilotOpsPowerMw * pilotAlongHours * 1000
+
+  const scDieselCo2 = ((scTugFuelL + scPilotFuelL) * dieselEfWtw) / 1000
+  const scElectricCo2 = ((scTugEnergyKwh + scPilotEnergyKwh) * gridEf) / 1000
+  const scTotalCo2 = scDieselCo2 + scElectricCo2
+
+  const scFuelCost = (scTugFuelL + scPilotFuelL) * dieselPrice
+  const scEnergyCost = (scTugEnergyKwh + scPilotEnergyKwh) * electricityPrice
+  const scOpsMaintenance = scTugsElectric * tugOpsOpexPerBoat + scPilotsElectric * pilotOpsOpexPerBoat
+  const scTotalOpex = scFuelCost + scEnergyCost + scOpsMaintenance
+
+  // ── Step 7: CAPEX (OPS charging berths for new electric boats) ──
+  const newTugElectric = convertedTugs + scenario.tugs_to_add
+  const newPilotElectric = convertedPilots + scenario.pilot_boats_to_add
+  const tugCapex = newTugElectric * tugOpsCapexPerBerth
+  const pilotCapex = newPilotElectric * pilotOpsCapexPerBerth
+
+  return {
+    total_tug_trips: totalTugTrips,
+    total_tug_hours: totalTugHours,
+    total_pilot_trips: totalPilotTrips,
+    total_pilot_hours: totalPilotHours,
+    min_tugs_required: minTugsRequired,
+    min_pilots_required: minPilotsRequired,
+    max_tugs_per_call: maxTugsPerCall,
+    max_pilots_per_call: maxPilotsPerCall,
+    baseline_tugs_diesel: blTugsDiesel,
+    baseline_tugs_electric: blTugsElectric,
+    baseline_pilots_diesel: blPilotsDiesel,
+    baseline_pilots_electric: blPilotsElectric,
+    baseline_tug_fuel_liters: blTugFuelL,
+    baseline_tug_energy_kwh: blTugEnergyKwh,
+    baseline_pilot_fuel_liters: blPilotFuelL,
+    baseline_pilot_energy_kwh: blPilotEnergyKwh,
+    baseline_co2_tons: blTotalCo2,
+    baseline_fuel_cost_usd: blFuelCost,
+    baseline_energy_cost_usd: blEnergyCost,
+    baseline_ops_maintenance_usd: blOpsMaintenance,
+    baseline_total_opex_usd: blTotalOpex,
+    scenario_tugs_diesel: scTugsDiesel,
+    scenario_tugs_electric: scTugsElectric,
+    scenario_pilots_diesel: scPilotsDiesel,
+    scenario_pilots_electric: scPilotsElectric,
+    scenario_tug_fuel_liters: scTugFuelL,
+    scenario_tug_energy_kwh: scTugEnergyKwh,
+    scenario_pilot_fuel_liters: scPilotFuelL,
+    scenario_pilot_energy_kwh: scPilotEnergyKwh,
+    scenario_co2_tons: scTotalCo2,
+    scenario_fuel_cost_usd: scFuelCost,
+    scenario_energy_cost_usd: scEnergyCost,
+    scenario_ops_maintenance_usd: scOpsMaintenance,
+    scenario_total_opex_usd: scTotalOpex,
+    tug_ops_capex_usd: tugCapex,
+    pilot_ops_capex_usd: pilotCapex,
+    total_ops_capex_usd: tugCapex + pilotCapex,
   }
 }
 
@@ -941,12 +1215,14 @@ export function calculateTerminalPiece(
     scenarioResult.totals.total_opex_usd +
     chargerResult.totals.total_annual_opex_usd +
     berthResult.totals.total_ops_opex_usd +
+    berthResult.totals.total_dc_opex_usd +
     gridResult.grid_opex_usd
 
   const totalCapex =
     scenarioResult.totals.total_capex_usd +
     chargerResult.totals.total_capex_usd +
     berthResult.totals.total_ops_capex_usd +
+    berthResult.totals.total_dc_capex_usd +
     gridResult.total_grid_capex_usd
 
   // ── CO2 Savings ──
@@ -1016,6 +1292,35 @@ export function calculatePortPiece(
     calculateTerminalPiece(t, assumptions, economicMap)
   )
 
+  // ── Port Services (tugs & pilot boats) ──
+  const defaultBaseline: PortServicesBaseline = {
+    tugs_diesel: 0, tugs_electric: 0,
+    pilot_boats_diesel: 0, pilot_boats_electric: 0,
+  }
+  const defaultScenario: PortServicesScenario = {
+    tugs_to_convert: 0, tugs_to_add: 0,
+    pilot_boats_to_convert: 0, pilot_boats_to_add: 0,
+  }
+
+  const portServicesBaseline = request.port_services_baseline ?? defaultBaseline
+  const portServicesScenario = request.port_services_scenario ?? defaultScenario
+
+  const hasPortServices =
+    portServicesBaseline.tugs_diesel > 0 ||
+    portServicesBaseline.tugs_electric > 0 ||
+    portServicesBaseline.pilot_boats_diesel > 0 ||
+    portServicesBaseline.pilot_boats_electric > 0
+
+  const portServicesResult = hasPortServices
+    ? calculatePortServices(
+        request.terminals,
+        portServicesBaseline,
+        portServicesScenario,
+        assumptions.fleetOps,
+        economicMap,
+      )
+    : null
+
   // Aggregate totals
   let baselineDiesel = 0
   let baselineKwh = 0
@@ -1028,7 +1333,9 @@ export function calculatePortPiece(
   let equipmentCapex = 0
   let chargerCapex = 0
   let opsCapex = 0
+  let dcCapex = 0
   let gridCapex = 0
+  let portServicesCapex = 0
 
   for (const tr of terminalResults) {
     baselineDiesel += tr.baseline_totals.total_diesel_liters
@@ -1046,10 +1353,26 @@ export function calculatePortPiece(
     equipmentCapex += tr.scenario_totals.total_equipment_capex_usd
     chargerCapex += tr.charger_totals.total_capex_usd
     opsCapex += tr.berth_totals.total_ops_capex_usd
+    dcCapex += tr.berth_totals.total_dc_capex_usd
     gridCapex += tr.grid.total_grid_capex_usd
   }
 
-  const totalCapex = equipmentCapex + chargerCapex + opsCapex + gridCapex
+  // Add port services to totals
+  if (portServicesResult) {
+    baselineDiesel += portServicesResult.baseline_tug_fuel_liters + portServicesResult.baseline_pilot_fuel_liters
+    baselineKwh += portServicesResult.baseline_tug_energy_kwh + portServicesResult.baseline_pilot_energy_kwh
+    baselineCo2 += portServicesResult.baseline_co2_tons
+    baselineOpex += portServicesResult.baseline_total_opex_usd
+
+    scenarioDiesel += portServicesResult.scenario_tug_fuel_liters + portServicesResult.scenario_pilot_fuel_liters
+    scenarioKwh += portServicesResult.scenario_tug_energy_kwh + portServicesResult.scenario_pilot_energy_kwh
+    scenarioCo2 += portServicesResult.scenario_co2_tons
+    scenarioOpex += portServicesResult.scenario_total_opex_usd
+
+    portServicesCapex = portServicesResult.total_ops_capex_usd
+  }
+
+  const totalCapex = equipmentCapex + chargerCapex + opsCapex + dcCapex + gridCapex + portServicesCapex
   const dieselSaved = baselineDiesel - scenarioDiesel
   const co2Saved = baselineCo2 - scenarioCo2
   const co2ReductionPercent = baselineCo2 > 0 ? (co2Saved / baselineCo2) * 100 : 0
@@ -1062,6 +1385,7 @@ export function calculatePortPiece(
   return {
     port: request.port,
     terminals: terminalResults,
+    port_services: portServicesResult ?? undefined,
     totals: {
       baseline_diesel_liters: baselineDiesel,
       baseline_kwh: baselineKwh,
@@ -1076,7 +1400,9 @@ export function calculatePortPiece(
       equipment_capex_usd: equipmentCapex,
       charger_capex_usd: chargerCapex,
       ops_capex_usd: opsCapex,
+      dc_capex_usd: dcCapex,
       grid_capex_usd: gridCapex,
+      port_services_capex_usd: portServicesCapex,
       total_capex_usd: totalCapex,
 
       diesel_liters_saved: dieselSaved,

@@ -50,10 +50,9 @@ const NON_EDITABLE_COLUMNS = [
   'unit_label', 'unit', 'source', 'cable_type', 'cable_size', 'ops_voltage',
 ]
 
-const PROFILE_NAME = 'default'
-
 export default function AssumptionsPage() {
-  const { refreshAssumptionFingerprint } = usePieceContext()
+  const { refreshAssumptionFingerprint, activeAssumptionProfile, activeScenarioName } = usePieceContext()
+  const PROFILE_NAME = activeAssumptionProfile
   const [activeTable, setActiveTable] = useState<TableKey>('economic_assumptions')
   const [data, setData] = useState<Record<string, unknown>[]>([])
   const [overrides, setOverrides] = useState<PieceAssumptionOverride[]>([])
@@ -76,6 +75,7 @@ export default function AssumptionsPage() {
     setLoading(true)
     setError(null)
     setEditingCell(null)
+    setData([])  // Clear stale data immediately to prevent key mismatch during table switch
 
     const [tableRes, overridesRes] = await Promise.all([
       supabase.from(activeTable).select('*').order('display_name', { ascending: true }),
@@ -95,7 +95,7 @@ export default function AssumptionsPage() {
       setOverrides((overridesRes.data ?? []) as PieceAssumptionOverride[])
     }
     setLoading(false)
-  }, [activeTable])
+  }, [activeTable, PROFILE_NAME])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -126,14 +126,13 @@ export default function AssumptionsPage() {
 
   const isEditable = (col: string): boolean => {
     if (NON_EDITABLE_COLUMNS.includes(col)) return false
-    // Only numeric columns are editable
+    // Only numeric columns are editable — check any row (some may be null)
     if (data.length === 0) return false
-    const sample = data[0][col]
-    return typeof sample === 'number'
+    return data.some((row) => typeof row[col] === 'number')
   }
 
   const getRowKey = (row: Record<string, unknown>): string => {
-    return String(row[activeTableInfo.rowKeyCol] ?? '')
+    return String(row[activeTableInfo.rowKeyCol] ?? row['id'] ?? '')
   }
 
   // Check if a cell has an override
@@ -277,6 +276,17 @@ export default function AssumptionsPage() {
     <>
       <div className="py-8">
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
+          {/* Scenario indicator */}
+          {activeScenarioName && PROFILE_NAME !== 'default' && (
+            <div className="mb-4 bg-[#eef5fc] border border-[#c5ddf0] rounded-xl px-5 py-3 flex items-center justify-between">
+              <p className="text-sm text-[#3c5e86]">
+                Editing assumptions for: <span className="font-semibold">{activeScenarioName}</span>
+              </p>
+              <span className="text-[10px] text-[#8c8c8c]">
+                Profile: {PROFILE_NAME}
+              </span>
+            </div>
+          )}
           <div className="flex gap-6">
             {/* Sidebar */}
             <div className="w-64 shrink-0">

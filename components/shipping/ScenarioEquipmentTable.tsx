@@ -1,7 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import type { TerminalType, BaselineEquipmentEntry, ScenarioEquipmentEntry } from '@/lib/types'
+import { createClient } from '@/utils/supabase/client'
+import { usePieceContext } from '@/app/piece/context/PieceContext'
+
+// PROFILE_NAME is now derived from context inside components
 
 type Props = {
   terminalType: TerminalType
@@ -10,33 +14,45 @@ type Props = {
   onChange: (updated: Record<string, ScenarioEquipmentEntry>) => void
 }
 
-// PIECE equipment data
+// Structural metadata (DB is source of truth for numeric values)
 type EquipmentMeta = {
   key: string
   name: string
   category: 'grid_powered' | 'mobile'
   type: 'quayside' | 'yard' | 'horizontal'
   terminalTypes: TerminalType[]
-  kwhPerTeu: number
-  peakKw: number
-  capexUsd: number
+}
+
+// Numeric specs fetched from DB
+type EquipmentSpecs = {
+  kwh_per_teu: number
+  peak_power_kw: number
+  capex_usd: number
+  annual_opex_usd: number
+}
+
+type SpecDefaults = {
+  kwh_per_teu: number
+  peak_power_kw: number
+  capex_usd: number
+  annual_opex_usd: number
 }
 
 const PIECE_EQUIPMENT: EquipmentMeta[] = [
   // Grid-powered equipment (always electric)
-  { key: 'mhc', name: 'Mobile Harbor Crane', category: 'grid_powered', type: 'quayside', terminalTypes: ['container'], kwhPerTeu: 5.5, peakKw: 750, capexUsd: 6875000 },
-  { key: 'sts', name: 'Ship-to-Shore Crane', category: 'grid_powered', type: 'quayside', terminalTypes: ['container'], kwhPerTeu: 9.3, peakKw: 1100, capexUsd: 12300000 },
-  { key: 'rmg', name: 'Rail Mounted Gantry', category: 'grid_powered', type: 'yard', terminalTypes: ['container'], kwhPerTeu: 2.7, peakKw: 400, capexUsd: 2520000 },
-  { key: 'rtg', name: 'Rubber Tired Gantry', category: 'grid_powered', type: 'yard', terminalTypes: ['container'], kwhPerTeu: 2.8, peakKw: 300, capexUsd: 2970000 },
-  { key: 'asc', name: 'Automated Stacking Crane', category: 'grid_powered', type: 'yard', terminalTypes: ['container'], kwhPerTeu: 2.5, peakKw: 330, capexUsd: 4000000 },
-  { key: 'reefer', name: 'Reefer Connection', category: 'grid_powered', type: 'yard', terminalTypes: ['container'], kwhPerTeu: 3.6, peakKw: 5, capexUsd: 0 },
+  { key: 'mhc', name: 'Mobile Harbor Crane', category: 'grid_powered', type: 'quayside', terminalTypes: ['container'] },
+  { key: 'sts', name: 'Ship-to-Shore Crane', category: 'grid_powered', type: 'quayside', terminalTypes: ['container'] },
+  { key: 'rmg', name: 'Rail Mounted Gantry', category: 'grid_powered', type: 'yard', terminalTypes: ['container'] },
+  { key: 'rtg', name: 'Rubber Tired Gantry', category: 'grid_powered', type: 'yard', terminalTypes: ['container'] },
+  { key: 'asc', name: 'Automated Stacking Crane', category: 'grid_powered', type: 'yard', terminalTypes: ['container'] },
+  { key: 'reefer', name: 'Reefer Connection', category: 'grid_powered', type: 'yard', terminalTypes: ['container'] },
 
   // Mobile equipment (diesel or electric)
-  { key: 'agv', name: 'Automated Guided Vehicle', category: 'mobile', type: 'horizontal', terminalTypes: ['container'], kwhPerTeu: 2.5, peakKw: 200, capexUsd: 750000 },
-  { key: 'tt', name: 'Terminal Tractor', category: 'mobile', type: 'horizontal', terminalTypes: ['container', 'roro'], kwhPerTeu: 2.2, peakKw: 440, capexUsd: 165000 },
-  { key: 'ech', name: 'Empty Container Handler', category: 'mobile', type: 'yard', terminalTypes: ['container'], kwhPerTeu: 1.8, peakKw: 220, capexUsd: 150000 },
-  { key: 'rs', name: 'Reach Stacker', category: 'mobile', type: 'yard', terminalTypes: ['container', 'roro'], kwhPerTeu: 2.8, peakKw: 840, capexUsd: 150000 },
-  { key: 'sc', name: 'Straddle Carrier', category: 'mobile', type: 'yard', terminalTypes: ['container'], kwhPerTeu: 3.5, peakKw: 360, capexUsd: 400000 },
+  { key: 'agv', name: 'Automated Guided Vehicle', category: 'mobile', type: 'horizontal', terminalTypes: ['container'] },
+  { key: 'tt', name: 'Terminal Tractor', category: 'mobile', type: 'horizontal', terminalTypes: ['container', 'roro'] },
+  { key: 'ech', name: 'Empty Container Handler', category: 'mobile', type: 'yard', terminalTypes: ['container'] },
+  { key: 'rs', name: 'Reach Stacker', category: 'mobile', type: 'yard', terminalTypes: ['container', 'roro'] },
+  { key: 'sc', name: 'Straddle Carrier', category: 'mobile', type: 'yard', terminalTypes: ['container'] },
 ]
 
 const CATEGORIES = [
@@ -50,19 +66,54 @@ function parseQty(raw: string): number {
   return isNaN(n) || n < 0 ? 0 : n
 }
 
+// Editable spec fields in expanded detail
+const EDITABLE_COLUMNS = ['capex_usd', 'annual_opex_usd', 'kwh_per_teu', 'peak_power_kw'] as const
+type EditableColumn = typeof EDITABLE_COLUMNS[number]
+
 function EquipmentRow({
   meta,
   baselineEntry,
   scenarioEntry,
+  specs,
+  defaults,
+  overrideFlags,
   onChange,
+  onSpecChange,
 }: {
   meta: EquipmentMeta
   baselineEntry: BaselineEquipmentEntry
   scenarioEntry: ScenarioEquipmentEntry
+  specs: EquipmentSpecs
+  defaults: SpecDefaults
+  overrideFlags: Record<string, boolean>
   onChange: (updated: ScenarioEquipmentEntry) => void
+  onSpecChange: (column: EditableColumn, value: number) => void
 }) {
   const [expanded, setExpanded] = useState(false)
   const isGridPowered = meta.category === 'grid_powered'
+
+  // String state for editable fields
+  const [capexStr, setCapexStr] = useState(String(specs.capex_usd))
+  const [opexStr, setOpexStr] = useState(String(specs.annual_opex_usd))
+  const [kwhStr, setKwhStr] = useState(String(specs.kwh_per_teu))
+  const [peakStr, setPeakStr] = useState(String(specs.peak_power_kw))
+
+  // Sync string state when specs change (assumption tab sync)
+  useEffect(() => { setCapexStr(String(specs.capex_usd)) }, [specs.capex_usd])
+  useEffect(() => { setOpexStr(String(specs.annual_opex_usd)) }, [specs.annual_opex_usd])
+  useEffect(() => { setKwhStr(String(specs.kwh_per_teu)) }, [specs.kwh_per_teu])
+  useEffect(() => { setPeakStr(String(specs.peak_power_kw)) }, [specs.peak_power_kw])
+
+  const handleBlur = (column: EditableColumn, rawStr: string) => {
+    const value = parseFloat(rawStr) || 0
+    switch (column) {
+      case 'capex_usd': setCapexStr(String(value)); break
+      case 'annual_opex_usd': setOpexStr(String(value)); break
+      case 'kwh_per_teu': setKwhStr(String(value)); break
+      case 'peak_power_kw': setPeakStr(String(value)); break
+    }
+    onSpecChange(column, value)
+  }
 
   // Calculate baseline totals
   const baselineDiesel = baselineEntry.existing_diesel
@@ -77,6 +128,51 @@ function EquipmentRow({
   // Validation: can't convert more than existing diesel
   const maxConvert = baselineDiesel
   const convertWarning = scenarioEntry.num_to_convert > maxConvert
+
+  const capexHasOverride = overrideFlags[`${meta.key}:capex_usd`] ?? false
+  const opexHasOverride = overrideFlags[`${meta.key}:annual_opex_usd`] ?? false
+  const kwhHasOverride = overrideFlags[`${meta.key}:kwh_per_teu`] ?? false
+  const peakHasOverride = overrideFlags[`${meta.key}:peak_power_kw`] ?? false
+
+  const isMonetary = (col: EditableColumn) => col === 'capex_usd' || col === 'annual_opex_usd'
+
+  function specInput(
+    label: string,
+    value: string,
+    setter: (v: string) => void,
+    column: EditableColumn,
+    hasOverride: boolean,
+    defaultVal: number,
+    step: number,
+    suffix?: string,
+  ) {
+    const isCurrency = isMonetary(column)
+    return (
+      <div className="flex items-center gap-2">
+        <span className="text-[#777] w-16 shrink-0">{label}:</span>
+        {isCurrency && <span className="text-[#777] text-xs">$</span>}
+        <input
+          type="number"
+          min={0}
+          step={step}
+          value={value}
+          onChange={(e) => setter(e.target.value)}
+          onBlur={() => handleBlur(column, value)}
+          className={`w-32 px-2 py-1 rounded border text-xs text-[#414141] focus:outline-none ${
+            hasOverride
+              ? 'border-blue-300 bg-blue-50/40 focus:border-blue-500'
+              : 'border-gray-300 bg-white focus:border-[#3c5e86]'
+          }`}
+        />
+        {suffix && <span className="text-[#888] text-[10px]">{isCurrency ? `USD${suffix}` : suffix}</span>}
+        {hasOverride && (
+          <span className="text-[10px] text-blue-500 font-medium">
+            custom (default: {isCurrency ? `$${defaultVal.toLocaleString()} USD` : defaultVal})
+          </span>
+        )}
+      </div>
+    )
+  }
 
   return (
     <>
@@ -172,11 +268,13 @@ function EquipmentRow({
       {expanded && (
         <tr className="border-b border-gray-100">
           <td colSpan={7} className="p-0">
-            <div className="bg-[#f5f5f5] px-8 py-3 text-xs space-y-1">
+            <div className="bg-[#f5f5f5] px-8 py-3 text-xs space-y-2">
               <div><span className="text-[#777]">Type:</span> <span className="text-[#444]">{meta.type}</span></div>
-              <div><span className="text-[#777]">CAPEX (new electric):</span> <span className="text-[#444]">${(meta.capexUsd / 1000).toLocaleString()}K</span></div>
-              <div><span className="text-[#777]">kWh/TEU:</span> <span className="text-[#444]">{meta.kwhPerTeu}</span></div>
-              <div><span className="text-[#777]">Peak kW:</span> <span className="text-[#444]">{meta.peakKw}</span></div>
+              {specInput('CAPEX', capexStr, setCapexStr, 'capex_usd', capexHasOverride, defaults.capex_usd, 10000, '/unit')}
+              {specInput('OPEX', opexStr, setOpexStr, 'annual_opex_usd', opexHasOverride, defaults.annual_opex_usd, 1000, '/unit/year')}
+              {specInput('kWh/TEU', kwhStr, setKwhStr, 'kwh_per_teu', kwhHasOverride, defaults.kwh_per_teu, 0.1)}
+              {specInput('Peak kW', peakStr, setPeakStr, 'peak_power_kw', peakHasOverride, defaults.peak_power_kw, 10)}
+              <div className="text-[10px] text-[#888] mt-1">Synced with Assumptions tab</div>
             </div>
           </td>
         </tr>
@@ -192,7 +290,11 @@ function CategoryGroup({
   items,
   baseline,
   scenario,
+  specsMap,
+  defaultsMap,
+  overrideFlags,
   onChange,
+  onSpecChange,
 }: {
   label: string
   sublabel: string
@@ -200,7 +302,11 @@ function CategoryGroup({
   items: EquipmentMeta[]
   baseline: Record<string, BaselineEquipmentEntry>
   scenario: Record<string, ScenarioEquipmentEntry>
+  specsMap: Record<string, EquipmentSpecs>
+  defaultsMap: Record<string, SpecDefaults>
+  overrideFlags: Record<string, boolean>
   onChange: (updated: Record<string, ScenarioEquipmentEntry>) => void
+  onSpecChange: (equipmentKey: string, column: EditableColumn, value: number) => void
 }) {
   const [open, setOpen] = useState(false)
 
@@ -216,6 +322,9 @@ function CategoryGroup({
   }
 
   if (items.length === 0) return null
+
+  const fallbackSpecs: EquipmentSpecs = { kwh_per_teu: 0, peak_power_kw: 0, capex_usd: 0, annual_opex_usd: 0 }
+  const fallbackDefaults: SpecDefaults = { kwh_per_teu: 0, peak_power_kw: 0, capex_usd: 0, annual_opex_usd: 0 }
 
   return (
     <>
@@ -246,7 +355,11 @@ function CategoryGroup({
             meta={meta}
             baselineEntry={baselineEntry}
             scenarioEntry={scenarioEntry}
+            specs={specsMap[meta.key] ?? fallbackSpecs}
+            defaults={defaultsMap[meta.key] ?? fallbackDefaults}
+            overrideFlags={overrideFlags}
             onChange={(updated) => onChange({ ...scenario, [meta.key]: updated })}
+            onSpecChange={(column, value) => onSpecChange(meta.key, column, value)}
           />
         )
       })}
@@ -260,6 +373,103 @@ export default function ScenarioEquipmentTable({
   scenario,
   onChange,
 }: Props) {
+  const { refreshAssumptionFingerprint, currentAssumptionFingerprint, activeAssumptionProfile } = usePieceContext()
+  const PROFILE_NAME = activeAssumptionProfile
+
+  // DB-backed equipment specs
+  const [specsMap, setSpecsMap] = useState<Record<string, EquipmentSpecs>>({})
+  const [defaultsMap, setDefaultsMap] = useState<Record<string, SpecDefaults>>({})
+  const [overrideFlags, setOverrideFlags] = useState<Record<string, boolean>>({})
+
+  // Fetch equipment specs from DB + overrides
+  const fetchEquipmentSpecs = useCallback(async () => {
+    const supabase = createClient()
+
+    const { data: eqRows } = await supabase
+      .from('piece_equipment')
+      .select('equipment_key, kwh_per_teu, peak_power_kw, capex_usd, annual_opex_usd')
+
+    const { data: overrides } = await supabase
+      .from('piece_assumption_overrides')
+      .select('row_key, column_name, custom_value')
+      .eq('profile_name', PROFILE_NAME)
+      .eq('table_name', 'piece_equipment')
+
+    const defs: Record<string, SpecDefaults> = {}
+    const specs: Record<string, EquipmentSpecs> = {}
+    for (const row of eqRows ?? []) {
+      const d: SpecDefaults = {
+        kwh_per_teu: Number(row.kwh_per_teu),
+        peak_power_kw: Number(row.peak_power_kw),
+        capex_usd: Number(row.capex_usd),
+        annual_opex_usd: Number(row.annual_opex_usd),
+      }
+      defs[row.equipment_key] = d
+      specs[row.equipment_key] = { ...d }
+    }
+
+    const flags: Record<string, boolean> = {}
+    for (const o of overrides ?? []) {
+      const key = o.row_key
+      const col = o.column_name as keyof EquipmentSpecs
+      if (specs[key] && col in specs[key]) {
+        specs[key][col] = Number(o.custom_value)
+        flags[`${key}:${col}`] = true
+      }
+    }
+
+    setDefaultsMap(defs)
+    setSpecsMap(specs)
+    setOverrideFlags(flags)
+  }, [PROFILE_NAME])
+
+  useEffect(() => {
+    fetchEquipmentSpecs()
+  }, [fetchEquipmentSpecs, currentAssumptionFingerprint])
+
+  const saveEquipmentOverride = useCallback(async (
+    equipmentKey: string,
+    columnName: EditableColumn,
+    value: number,
+  ) => {
+    const defaultValue = defaultsMap[equipmentKey]?.[columnName] ?? 0
+    const supabase = createClient()
+
+    if (value === defaultValue) {
+      await supabase
+        .from('piece_assumption_overrides')
+        .delete()
+        .eq('profile_name', PROFILE_NAME)
+        .eq('table_name', 'piece_equipment')
+        .eq('row_key', equipmentKey)
+        .eq('column_name', columnName)
+    } else {
+      await supabase
+        .from('piece_assumption_overrides')
+        .upsert(
+          {
+            profile_name: PROFILE_NAME,
+            table_name: 'piece_equipment',
+            row_key: equipmentKey,
+            column_name: columnName,
+            custom_value: value,
+          },
+          { onConflict: 'profile_name,table_name,row_key,column_name' }
+        )
+    }
+
+    setSpecsMap((prev) => ({
+      ...prev,
+      [equipmentKey]: { ...prev[equipmentKey], [columnName]: value },
+    }))
+    setOverrideFlags((prev) => ({
+      ...prev,
+      [`${equipmentKey}:${columnName}`]: value !== defaultValue,
+    }))
+
+    await refreshAssumptionFingerprint()
+  }, [defaultsMap, refreshAssumptionFingerprint, PROFILE_NAME])
+
   // Filter equipment by terminal type
   const filteredEquipment = PIECE_EQUIPMENT.filter((e) =>
     e.terminalTypes.includes(terminalType)
@@ -341,7 +551,11 @@ export default function ScenarioEquipmentTable({
               items={filteredEquipment.filter((e) => e.category === cat.key)}
               baseline={baseline}
               scenario={scenario}
+              specsMap={specsMap}
+              defaultsMap={defaultsMap}
+              overrideFlags={overrideFlags}
               onChange={onChange}
+              onSpecChange={(equipmentKey, column, value) => saveEquipmentOverride(equipmentKey, column, value)}
             />
           ))}
         </tbody>
