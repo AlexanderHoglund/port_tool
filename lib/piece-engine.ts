@@ -28,6 +28,7 @@ import type {
   PiecePortResult,
   PiecePortServicesResult,
   BerthDefinition,
+  BerthVesselCall,
   BerthScenarioConfig,
   BaselineEquipmentEntry,
   ScenarioEquipmentEntry,
@@ -454,6 +455,7 @@ export function calculateChargers(
  */
 export function calculateBerthInfrastructure(
   berths: MergedBerth[],
+  terminalVesselCalls: BerthVesselCall[],
   fleetOps: PieceFleetOpsRow[],
   economicMap: Record<string, number>
 ): {
@@ -530,64 +532,8 @@ export function calculateBerthInfrastructure(
     const berth_dc_capex = (!berth.dc_existing && berth.dc_enabled) ? dcCapexUsd : 0
     const berth_dc_opex = berth.dc_enabled ? dcAnnualOpex : 0
 
-    // ── Iterate vessel_calls to compute energy/emissions per call type ──
-    const callLineItems: PieceBerthVesselCallLineItem[] = []
-    let berthTotalCalls = 0
-    let berthTotalBerthHours = 0
-    let berthTotalShorePowerMwh = 0
-    let berthBaselineCo2 = 0
-    let berthScenarioShorePowerKwh = 0
-    let berthScenarioCo2 = 0
-    let berthScenarioEnergyCost = 0
-
-    for (const call of berth.vessel_calls) {
-      const callFleetRow = fleetOps.find(
-        (f) => f.vessel_segment_key === call.vessel_segment_key
-      )
-      const callOpsPowerMw = callFleetRow?.ops_power_mw ?? opsPowerMw
-
-      const callBerthHours = call.annual_calls * call.avg_berth_hours
-      const callShorePowerMwh = callOpsPowerMw * call.avg_berth_hours * call.annual_calls
-      const callShorePowerKwh = callShorePowerMwh * 1000
-
-      // Baseline: vessel burns HFO at berth
-      const callBaselineCo2 = callShorePowerMwh * vesselAuxEfPerMwh
-
-      // Scenario: OPS-enabled → shore power from grid, otherwise vessel diesel
-      let callScenarioShorePowerKwh = 0
-      let callScenarioCo2 = 0
-      let callScenarioEnergyCost = 0
-
-      if (berth.ops_enabled) {
-        callScenarioShorePowerKwh = callShorePowerKwh
-        callScenarioCo2 = (callScenarioShorePowerKwh * gridEf) / 1000
-        callScenarioEnergyCost = callScenarioShorePowerKwh * electricityPrice
-      } else {
-        callScenarioCo2 = callBaselineCo2
-      }
-
-      callLineItems.push({
-        vessel_segment_key: call.vessel_segment_key,
-        vessel_segment_name: callFleetRow?.display_name ?? call.vessel_segment_key,
-        annual_calls: call.annual_calls,
-        avg_berth_hours: call.avg_berth_hours,
-        annual_berth_hours: callBerthHours,
-        ops_power_mw: callOpsPowerMw,
-        shore_power_mwh: callShorePowerMwh,
-        baseline_co2_tons: callBaselineCo2,
-        scenario_shore_power_kwh: callScenarioShorePowerKwh,
-        scenario_co2_tons: callScenarioCo2,
-        scenario_energy_cost_usd: callScenarioEnergyCost,
-      })
-
-      berthTotalCalls += call.annual_calls
-      berthTotalBerthHours += callBerthHours
-      berthTotalShorePowerMwh += callShorePowerMwh
-      berthBaselineCo2 += callBaselineCo2
-      berthScenarioShorePowerKwh += callScenarioShorePowerKwh
-      berthScenarioCo2 += callScenarioCo2
-      berthScenarioEnergyCost += callScenarioEnergyCost
-    }
+    // Vessel call energy is now computed at terminal level (after berth loop)
+    // Berth line items only contain CAPEX data
 
     const lineItem: PieceBerthLineItem = {
       berth_id: berth.id,
@@ -595,9 +541,9 @@ export function calculateBerthInfrastructure(
       berth_number: berth.berth_number,
       max_vessel_segment_key: berth.max_vessel_segment_key,
       max_vessel_segment_name: maxFleetRow?.display_name ?? berth.max_vessel_segment_key,
-      total_annual_calls: berthTotalCalls,
-      total_annual_berth_hours: berthTotalBerthHours,
-      vessel_calls: callLineItems,
+      total_annual_calls: 0,
+      total_annual_berth_hours: 0,
+      vessel_calls: [],
       ops_enabled: berth.ops_enabled,
       dc_enabled: berth.dc_enabled,
       ops_power_mw: opsPowerMw,
@@ -609,20 +555,20 @@ export function calculateBerthInfrastructure(
       dc_power_mw: berth.dc_enabled ? dcPowerMw : 0,
       dc_capex_usd: berth_dc_capex,
       dc_annual_opex_usd: berth_dc_opex,
-      baseline_berth_hours: berthTotalBerthHours,
-      baseline_diesel_liters: 0, // OPS model uses MWh, not liters
-      baseline_co2_tons: berthBaselineCo2,
+      baseline_berth_hours: 0,
+      baseline_diesel_liters: 0,
+      baseline_co2_tons: 0,
       baseline_fuel_cost_usd: 0,
       scenario_diesel_liters: 0,
-      scenario_shore_power_kwh: berthScenarioShorePowerKwh,
-      scenario_co2_tons: berthScenarioCo2,
+      scenario_shore_power_kwh: 0,
+      scenario_co2_tons: 0,
       scenario_fuel_cost_usd: 0,
-      scenario_energy_cost_usd: berthScenarioEnergyCost,
+      scenario_energy_cost_usd: 0,
     }
 
     lineItems.push(lineItem)
 
-    // Accumulate totals
+    // Accumulate CAPEX totals (per-berth)
     if (berth.ops_enabled) {
       totalOpsCapex += berth_ops_capex
       totalOpsOpex += opsAnnualOpex
@@ -633,10 +579,38 @@ export function calculateBerthInfrastructure(
       totalDcOpex += berth_dc_opex
       totalDcPeakMw += dcPowerMw
     }
-    totalBaselineCo2 += berthBaselineCo2
-    totalScenarioShorePower += berthScenarioShorePowerKwh
-    totalScenarioCo2 += berthScenarioCo2
-    totalScenarioCost += berthScenarioEnergyCost
+  }
+
+  // ── Terminal-level vessel call energy (OPS fraction model) ──
+  // OPS fraction = proportion of berths with OPS enabled in the scenario
+  const totalBerthCount = berths.length
+  const opsEnabledCount = berths.filter((b) => b.ops_enabled).length
+  const opsFraction = totalBerthCount > 0 ? opsEnabledCount / totalBerthCount : 0
+
+  for (const call of terminalVesselCalls) {
+    const fleetRow = fleetOps.find(
+      (f) => f.vessel_segment_key === call.vessel_segment_key
+    )
+    const opsPowerMw = fleetRow?.ops_power_mw ?? 2.0
+    const avgHours = call.avg_berth_hours ?? fleetRow?.typical_berth_hours ?? 12
+
+    // Shore power MWh per year for this vessel type
+    const shorePowerMwh = opsPowerMw * avgHours * call.annual_calls
+
+    // Baseline: ALL vessels run on diesel at berth (HFO auxiliary power)
+    const baselineCo2 = shorePowerMwh * vesselAuxEfPerMwh // tCO2e
+
+    // Scenario: opsFraction of calls use shore power (grid), rest use diesel
+    const scenarioShorePowerKwh = shorePowerMwh * opsFraction * 1000 // kWh
+    const scenarioGridCo2 = (scenarioShorePowerKwh * gridEf) / 1000 // tCO2e
+    const scenarioDieselCo2 = shorePowerMwh * (1 - opsFraction) * vesselAuxEfPerMwh // tCO2e
+    const scenarioCo2 = scenarioGridCo2 + scenarioDieselCo2
+    const scenarioEnergyCost = scenarioShorePowerKwh * electricityPrice // USD
+
+    totalBaselineCo2 += baselineCo2
+    totalScenarioShorePower += scenarioShorePowerKwh
+    totalScenarioCo2 += scenarioCo2
+    totalScenarioCost += scenarioEnergyCost
   }
 
   return {
@@ -838,20 +812,18 @@ export function calculatePortServices(
   let maxPilotsPerCall = 0
 
   for (const terminal of terminals) {
-    for (const berth of terminal.berths) {
-      for (const call of berth.vessel_calls) {
-        const segmentRow = fleetOps.find(
-          (f) => f.vessel_segment_key === call.vessel_segment_key
-        )
-        const tugsNeeded = segmentRow?.tugs_per_call ?? 1
-        const pilotsNeeded = segmentRow?.pilots_per_call ?? 1
+    for (const call of terminal.vessel_calls) {
+      const segmentRow = fleetOps.find(
+        (f) => f.vessel_segment_key === call.vessel_segment_key
+      )
+      const tugsNeeded = segmentRow?.tugs_per_call ?? 1
+      const pilotsNeeded = segmentRow?.pilots_per_call ?? 1
 
-        totalTugTrips += call.annual_calls * tugsNeeded
-        totalPilotTrips += call.annual_calls * pilotsNeeded
+      totalTugTrips += call.annual_calls * tugsNeeded
+      totalPilotTrips += call.annual_calls * pilotsNeeded
 
-        maxTugsPerCall = Math.max(maxTugsPerCall, tugsNeeded)
-        maxPilotsPerCall = Math.max(maxPilotsPerCall, pilotsNeeded)
-      }
+      maxTugsPerCall = Math.max(maxTugsPerCall, tugsNeeded)
+      maxPilotsPerCall = Math.max(maxPilotsPerCall, pilotsNeeded)
     }
   }
 
@@ -1070,6 +1042,7 @@ export function calculateTerminalPiece(
   // ── Berths / OPS ──
   const berthResult = calculateBerthInfrastructure(
     mergedBerths,
+    terminal.vessel_calls ?? [],
     assumptions.fleetOps,
     economicMap
   )

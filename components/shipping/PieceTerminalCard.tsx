@@ -5,17 +5,15 @@ import type {
   PieceTerminalConfig,
   TerminalType,
   BuildingsLightingConfig,
-  PortServicesBaseline,
-  PortServicesScenario,
 } from '@/lib/types'
 import BerthConfigPanel from './BerthConfigPanel'
 import BerthScenarioPanel from './BerthScenarioPanel'
+import OperationsPanel from './OperationsPanel'
 import ChargerPanel from './ChargerPanel'
 import GridInfraPanel from './GridInfraPanel'
 import BaselineEquipmentTable from './BaselineEquipmentTable'
 import ScenarioEquipmentTable from './ScenarioEquipmentTable'
 import BuildingsLightingPanel from './BuildingsLightingPanel'
-import PortServicesSection from './PortServicesSection'
 import CollapsibleSection from './CollapsibleSection'
 
 type Props = {
@@ -64,37 +62,6 @@ const DEFAULT_BUILDINGS_LIGHTING: BuildingsLightingConfig = {
   area_lights: 0,
   roadway_lights: 0,
   annual_operating_hours: 8760,
-}
-
-const DEFAULT_PORT_SERVICES_BASELINE: PortServicesBaseline = {
-  tugs_diesel: 0,
-  tugs_electric: 0,
-  pilot_boats_diesel: 0,
-  pilot_boats_electric: 0,
-}
-
-const DEFAULT_PORT_SERVICES_SCENARIO: PortServicesScenario = {
-  tugs_to_convert: 0,
-  tugs_to_add: 0,
-  pilot_boats_to_convert: 0,
-  pilot_boats_to_add: 0,
-}
-
-// Throughput config by terminal type
-function getThroughputLabel(type: TerminalType): string {
-  switch (type) {
-    case 'container': return 'Annual TEU'
-    case 'cruise': return 'Annual Passengers'
-    case 'roro': return 'Annual CEU'
-  }
-}
-
-function getThroughputPlaceholder(type: TerminalType): string {
-  switch (type) {
-    case 'container': return 'e.g., 500000'
-    case 'cruise': return 'e.g., 200000'
-    case 'roro': return 'e.g., 150000'
-  }
 }
 
 export default function PieceTerminalCard({
@@ -182,6 +149,7 @@ export default function PieceTerminalCard({
   }, [terminal.baseline_equipment, terminal.scenario_equipment])
 
   const berthCount = terminal.berths.length
+  const vesselCallCount = (terminal.vessel_calls ?? []).reduce((s, c) => s + c.annual_calls, 0)
   const opsExistingCount = terminal.berths.filter((b) => b.ops_existing).length
   const opsScenarioCount = terminal.berth_scenarios?.filter((b) => b.ops_enabled).length ?? 0
   const totalOpsCount = opsExistingCount + opsScenarioCount
@@ -247,28 +215,6 @@ export default function PieceTerminalCard({
           </span>
         )}
 
-        {/* Throughput input (baseline) or display (scenario) */}
-        {isBaseline ? (
-          <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-            <label className="text-[11px] text-[#666] whitespace-nowrap font-medium">{getThroughputLabel(terminal.terminal_type)}:</label>
-            <input
-              type="number"
-              min={0}
-              step={10000}
-              value={terminal.annual_teu || ''}
-              onChange={(e) => onChange({ ...terminal, annual_teu: parseInt(e.target.value) || 0 })}
-              placeholder={getThroughputPlaceholder(terminal.terminal_type)}
-              className="w-32 px-2 py-1 rounded border border-gray-300 text-xs text-[#414141] bg-white focus:border-[#3c5e86] focus:outline-none"
-            />
-          </div>
-        ) : (
-          terminal.annual_teu > 0 && (
-            <span className="text-[11px] text-[#555] font-medium">
-              {(terminal.annual_teu / 1000000).toFixed(1)}M TEU
-            </span>
-          )
-        )}
-
         {/* Mode badge */}
         <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${
           isBaseline
@@ -297,6 +243,9 @@ export default function PieceTerminalCard({
             )}
             {berthCount > 0 && (
               <span>{berthCount} berths{!isBaseline && totalOpsCount > 0 ? ` (${totalOpsCount} OPS)` : ''}</span>
+            )}
+            {vesselCallCount > 0 && (
+              <span>{vesselCallCount.toLocaleString()} calls/yr</span>
             )}
             {maxVesselLabel && (
               <span>Max: {maxVesselLabel}</span>
@@ -373,17 +322,24 @@ export default function PieceTerminalCard({
                 />
               </CollapsibleSection>
 
-              {/* Offshore Equipment */}
+              {/* Operations (throughput + vessel calls) */}
               <CollapsibleSection
-                title="Offshore Equipment"
+                title="Operations"
+                badge={vesselCallCount > 0
+                  ? `${vesselCallCount.toLocaleString()} calls/yr`
+                  : undefined}
                 defaultOpen={false}
               >
-                <PortServicesSection
-                  baseline={terminal.port_services_baseline ?? DEFAULT_PORT_SERVICES_BASELINE}
-                  scenario={terminal.port_services_scenario ?? DEFAULT_PORT_SERVICES_SCENARIO}
-                  onBaselineChange={(config) => onChange({ ...terminal, port_services_baseline: config })}
-                  onScenarioChange={(config) => onChange({ ...terminal, port_services_scenario: config })}
-                  mode="baseline"
+                <OperationsPanel
+                  terminalType={terminal.terminal_type}
+                  annualTeu={terminal.annual_teu}
+                  annualPassengers={terminal.annual_passengers}
+                  annualCeu={terminal.annual_ceu}
+                  vesselCalls={terminal.vessel_calls ?? []}
+                  onTeuChange={(v) => onChange({ ...terminal, annual_teu: v })}
+                  onPassengersChange={(v) => onChange({ ...terminal, annual_passengers: v })}
+                  onCeuChange={(v) => onChange({ ...terminal, annual_ceu: v })}
+                  onVesselCallsChange={(calls) => onChange({ ...terminal, vessel_calls: calls })}
                 />
               </CollapsibleSection>
             </>
@@ -449,19 +405,6 @@ export default function PieceTerminalCard({
                 />
               </CollapsibleSection>
 
-              {/* Offshore Equipment Changes */}
-              <CollapsibleSection
-                title="Offshore Equipment Changes"
-                defaultOpen={false}
-              >
-                <PortServicesSection
-                  baseline={terminal.port_services_baseline ?? DEFAULT_PORT_SERVICES_BASELINE}
-                  scenario={terminal.port_services_scenario ?? DEFAULT_PORT_SERVICES_SCENARIO}
-                  onBaselineChange={(config) => onChange({ ...terminal, port_services_baseline: config })}
-                  onScenarioChange={(config) => onChange({ ...terminal, port_services_scenario: config })}
-                  mode="scenario"
-                />
-              </CollapsibleSection>
             </>
           )}
         </>

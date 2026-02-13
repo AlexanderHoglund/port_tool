@@ -10,13 +10,17 @@ import type {
   BerthScenarioConfig,
   ScenarioSummary,
   ScenarioConfig,
+  PortServicesBaseline,
+  PortServicesScenario,
 } from '@/lib/types'
+import { PORT_SIZES } from '@/lib/constants'
 import PortIdentitySection from '@/components/shipping/PortIdentitySection'
 import PieceTerminalCard from '@/components/shipping/PieceTerminalCard'
 import PieceResultsSection from '@/components/shipping/PieceResultsSection'
 import DashboardTabs, { type DashboardTab } from '@/components/shipping/DashboardTabs'
 import ScenarioSubTabs from '@/components/shipping/ScenarioSubTabs'
 import BaselineSummary from '@/components/shipping/BaselineSummary'
+import PortServicesSection from '@/components/shipping/PortServicesSection'
 import CompareSection from '@/components/shipping/CompareSection'
 import SaveStatusIndicator from '@/components/shipping/SaveStatusIndicator'
 import { usePieceContext, createDefaultTerminal } from './context/PieceContext'
@@ -32,12 +36,21 @@ import {
 import { decomposePieceTerminals } from '@/lib/piece-reconstitute'
 import { createClient } from '@/utils/supabase/client'
 
+const DEFAULT_PORT_SERVICES_BASELINE: PortServicesBaseline = {
+  tugs_diesel: 0, tugs_electric: 0, pilot_boats_diesel: 0, pilot_boats_electric: 0,
+}
+const DEFAULT_PORT_SERVICES_SCENARIO: PortServicesScenario = {
+  tugs_to_convert: 0, tugs_to_add: 0, pilot_boats_to_convert: 0, pilot_boats_to_add: 0,
+}
+
 export default function PiecePage() {
   // ── Context (persistent across tab navigation) ──
   const {
     port, setPort,
     terminals, setTerminals,
     result, setResult,
+    portServicesBaseline, setPortServicesBaseline,
+    portServicesScenario, setPortServicesScenario,
     activeProjectId, activeProjectName,
     activeScenarioId, activeScenarioName,
     activeAssumptionProfile,
@@ -276,14 +289,16 @@ export default function PiecePage() {
         berth_number: idx + 1,
         berth_name: `Berth ${idx + 1}`,
         max_vessel_segment_key: berthDef.segment,
-        vessel_calls: [{
-          id: crypto.randomUUID(),
-          vessel_segment_key: berthDef.segment,
-          annual_calls: berthDef.calls,
-          avg_berth_hours: berthDef.hours,
-        }],
         ops_existing: false,
         dc_existing: false,
+      }))
+
+      // Terminal-level vessel calls (one entry per berth definition)
+      const vessel_calls = termDef.berths.map((berthDef) => ({
+        id: crypto.randomUUID(),
+        vessel_segment_key: berthDef.segment,
+        annual_calls: berthDef.calls,
+        avg_berth_hours: berthDef.hours,
       }))
 
       const berth_scenarios: BerthScenarioConfig[] = berths.map((b) => ({
@@ -315,29 +330,31 @@ export default function PiecePage() {
         name: termDef.name,
         terminal_type: termDef.type,
         annual_teu: termDef.teu,
+        vessel_calls,
         berths,
         berth_scenarios,
         baseline_equipment,
         scenario_equipment,
         cable_length_m: termDef.cableLength,
-        port_services_baseline: termIdx === 0 ? {
-          tugs_diesel: totalTugs,
-          tugs_electric: 0,
-          pilot_boats_diesel: totalPilotBoats,
-          pilot_boats_electric: 0,
-        } : undefined,
-        port_services_scenario: termIdx === 0 ? {
-          tugs_to_convert: totalTugs,
-          tugs_to_add: 0,
-          pilot_boats_to_convert: totalPilotBoats,
-          pilot_boats_to_add: 0,
-        } : undefined,
       }
     })
 
     setTerminals(newTerminals)
+    // Port-level offshore equipment
+    setPortServicesBaseline({
+      tugs_diesel: totalTugs,
+      tugs_electric: 0,
+      pilot_boats_diesel: totalPilotBoats,
+      pilot_boats_electric: 0,
+    })
+    setPortServicesScenario({
+      tugs_to_convert: totalTugs,
+      tugs_to_add: 0,
+      pilot_boats_to_convert: totalPilotBoats,
+      pilot_boats_to_add: 0,
+    })
     setResult(null)
-  }, [port.size_key, setTerminals, setResult])
+  }, [port.size_key, setTerminals, setPortServicesBaseline, setPortServicesScenario, setResult])
 
   // ── Auto-save helpers ──
 
@@ -346,12 +363,12 @@ export default function PiecePage() {
     savingRef.current = true
     setSaveStatus('saving')
     try {
-      const { baseline } = decomposePieceTerminals(terminals)
+      const { baseline } = decomposePieceTerminals(terminals, portServicesBaseline, portServicesScenario)
       await updateProjectBaseline(activeProjectId, { port, baseline })
 
       // Sync all scenario configs with the new baseline (also invalidates results)
       if (scenarioList.length > 0) {
-        await syncScenariosWithBaseline(activeProjectId, baseline, terminals)
+        await syncScenariosWithBaseline(activeProjectId, baseline)
         setResult(null)
         await refreshScenarioList()
 
@@ -370,14 +387,14 @@ export default function PiecePage() {
       setSaveStatus('error')
     }
     savingRef.current = false
-  }, [activeProjectId, terminals, port, scenarioList.length, setResult, refreshScenarioList, activeScenarioId, loadProjectScenario])
+  }, [activeProjectId, terminals, port, portServicesBaseline, portServicesScenario, scenarioList.length, setResult, refreshScenarioList, activeScenarioId, loadProjectScenario])
 
   const autoSaveScenario = useCallback(async () => {
     if (!activeScenarioId || savingRef.current) return
     savingRef.current = true
     setSaveStatus('saving')
     try {
-      const { scenario: scenarioData } = decomposePieceTerminals(terminals)
+      const { scenario: scenarioData } = decomposePieceTerminals(terminals, portServicesBaseline, portServicesScenario)
       await updateScenario(activeScenarioId, { scenario_config: scenarioData })
       dirtyRef.current = false
       setSaveStatus('saved')
@@ -386,7 +403,7 @@ export default function PiecePage() {
       setSaveStatus('error')
     }
     savingRef.current = false
-  }, [activeScenarioId, terminals])
+  }, [activeScenarioId, terminals, portServicesBaseline, portServicesScenario])
 
   // ── Auto-create first scenario ──
 
@@ -485,15 +502,11 @@ export default function PiecePage() {
     }
     try {
       const nextNum = scenarioList.length + 1
-      const { scenario: currentScenario } = decomposePieceTerminals(terminals)
-      // New scenario: preserve throughput data, reset electrification choices
+      const { scenario: currentScenario } = decomposePieceTerminals(terminals, portServicesBaseline, portServicesScenario)
+      // New scenario: reset electrification choices (operations data lives in baseline)
       const newScenarioConfig: ScenarioConfig = {
         terminals: currentScenario.terminals.map(st => ({
           terminal_id: st.terminal_id,
-          annual_teu: st.annual_teu,
-          annual_passengers: st.annual_passengers,
-          annual_ceu: st.annual_ceu,
-          vessel_calls_by_berth: st.vessel_calls_by_berth,
           scenario_equipment: {},
           berth_scenarios: st.berth_scenarios.map(bs => ({
             berth_id: bs.berth_id,
@@ -501,6 +514,8 @@ export default function PiecePage() {
             dc_enabled: false,
           })),
         })),
+        // Port services scenario starts fresh for new scenarios
+        port_services_scenario: undefined,
       }
       const scenarioId = await createScenario({
         project_id: activeProjectId,
@@ -532,28 +547,11 @@ export default function PiecePage() {
     setError(null)
 
     try {
-      const aggBaseline = { tugs_diesel: 0, tugs_electric: 0, pilot_boats_diesel: 0, pilot_boats_electric: 0 }
-      const aggScenario = { tugs_to_convert: 0, tugs_to_add: 0, pilot_boats_to_convert: 0, pilot_boats_to_add: 0 }
-      for (const t of terminals) {
-        if (t.port_services_baseline) {
-          aggBaseline.tugs_diesel += t.port_services_baseline.tugs_diesel
-          aggBaseline.tugs_electric += t.port_services_baseline.tugs_electric
-          aggBaseline.pilot_boats_diesel += t.port_services_baseline.pilot_boats_diesel
-          aggBaseline.pilot_boats_electric += t.port_services_baseline.pilot_boats_electric
-        }
-        if (t.port_services_scenario) {
-          aggScenario.tugs_to_convert += t.port_services_scenario.tugs_to_convert
-          aggScenario.tugs_to_add += t.port_services_scenario.tugs_to_add
-          aggScenario.pilot_boats_to_convert += t.port_services_scenario.pilot_boats_to_convert
-          aggScenario.pilot_boats_to_add += t.port_services_scenario.pilot_boats_to_add
-        }
-      }
-
       const body: PieceCalculationRequest = {
         port,
         terminals,
-        port_services_baseline: aggBaseline,
-        port_services_scenario: aggScenario,
+        port_services_baseline: portServicesBaseline ?? undefined,
+        port_services_scenario: portServicesScenario ?? undefined,
         assumption_profile: activeAssumptionProfile,
       }
 
@@ -573,7 +571,7 @@ export default function PiecePage() {
 
         // Auto-save result to scenario
         if (activeScenarioId) {
-          const { scenario: scenarioData } = decomposePieceTerminals(terminals)
+          const { scenario: scenarioData } = decomposePieceTerminals(terminals, portServicesBaseline, portServicesScenario)
           await updateScenario(activeScenarioId, {
             scenario_config: scenarioData,
             result: data.result,
@@ -607,6 +605,7 @@ export default function PiecePage() {
     terminals.some(
       (t) =>
         t.annual_teu > 0 &&
+        (t.vessel_calls ?? []).length > 0 &&
         (hasBaselineEquipment(t.baseline_equipment) ||
           hasScenarioChanges(t.scenario_equipment) ||
           t.berths.length > 0)
@@ -642,7 +641,7 @@ export default function PiecePage() {
   }
 
   // Get decomposed baseline for summary view
-  const decomposed = decomposePieceTerminals(terminals)
+  const decomposed = decomposePieceTerminals(terminals, portServicesBaseline, portServicesScenario)
 
   return (
     <>
@@ -695,100 +694,161 @@ export default function PiecePage() {
               BASELINE TAB
              ═══════════════════════════════════════════════════════════ */}
           {activeTab === 'baseline' && (
-            <div className="bg-[#e8f8fc] rounded-2xl p-8 border border-[#d4eefa]">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-8 h-8 rounded-full bg-[#3c5e86] text-white flex items-center justify-center text-sm font-bold">
-                  1
-                </div>
-                <div>
-                  <h2 className="text-xl font-semibold text-[#414141]">Port Baseline</h2>
-                  <p className="text-sm text-[#8c8c8c]">
-                    {scenarioList.length > 0
-                      ? 'Shared across all scenarios'
-                      : 'Configure your current port setup - terminal types, throughput, and existing equipment'}
+            <div className="space-y-6">
+              {/* Warning when editing with scenarios */}
+              {scenarioList.length > 0 && isBaselineEditing && (
+                <div className="rounded-xl bg-amber-50 border border-amber-200 px-5 py-3">
+                  <p className="text-sm text-amber-800 font-medium">
+                    Changes to the baseline affect ALL scenarios and will invalidate existing results.
                   </p>
+                  <button
+                    onClick={() => setIsBaselineEditing(false)}
+                    className="mt-1 text-xs text-amber-600 hover:text-amber-800 font-medium"
+                  >
+                    Cancel editing
+                  </button>
                 </div>
+              )}
+
+              {/* ── Section 1: Port Information ── */}
+              <div className="bg-[#e8f8fc] rounded-2xl p-8 border border-[#d4eefa]">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-8 h-8 rounded-full bg-[#3c5e86] text-white flex items-center justify-center text-sm font-bold">
+                    1
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-semibold text-[#414141]">Port Information</h2>
+                    <p className="text-sm text-[#8c8c8c]">Port identity and size classification</p>
+                  </div>
+                </div>
+
+                {scenarioList.length > 0 && !isBaselineEditing ? (
+                  /* Read-only port info summary */
+                  <div className="bg-white rounded-xl border border-gray-100 p-6">
+                    <div className="grid grid-cols-3 gap-6">
+                      <div>
+                        <div className="text-[10px] font-bold uppercase tracking-widest text-[#8c8c8c] mb-1">Port Name</div>
+                        <div className="text-sm font-semibold text-[#414141]">{port.name || 'Unnamed Port'}</div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] font-bold uppercase tracking-widest text-[#8c8c8c] mb-1">Location</div>
+                        <div className="text-sm text-[#414141]">{port.location || '-'}</div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] font-bold uppercase tracking-widest text-[#8c8c8c] mb-1">Size Category</div>
+                        <div className="text-sm text-[#414141]">
+                          {(PORT_SIZES.find((s) => s.value === port.size_key)?.label ?? port.size_key) || '-'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <PortIdentitySection
+                    port={port}
+                    onChange={setPort}
+                    onLoadDefaults={loadTypicalValues}
+                  />
+                )}
               </div>
 
-              {/* Collapsed summary when scenarios exist and not editing */}
-              {scenarioList.length > 0 && !isBaselineEditing ? (
-                <BaselineSummary
-                  port={port}
-                  baseline={decomposed.baseline}
-                  terminals={terminals}
-                  onEditBaseline={() => setIsBaselineEditing(true)}
-                />
-              ) : (
-                <>
-                  {/* Warning when editing with scenarios */}
-                  {scenarioList.length > 0 && isBaselineEditing && (
-                    <div className="mb-6 rounded-xl bg-amber-50 border border-amber-200 px-5 py-3">
-                      <p className="text-sm text-amber-800 font-medium">
-                        Changes to the baseline affect ALL scenarios and will invalidate existing results.
-                      </p>
-                      <button
-                        onClick={() => setIsBaselineEditing(false)}
-                        className="mt-1 text-xs text-amber-600 hover:text-amber-800 font-medium"
-                      >
-                        Cancel editing
-                      </button>
+              {/* ── Section 2: Port Baseline ── */}
+              <div className="bg-[#e8f8fc] rounded-2xl p-8 border border-[#d4eefa]">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-[#3c5e86] text-white flex items-center justify-center text-sm font-bold">
+                      2
                     </div>
-                  )}
-
-                  <div className="space-y-6">
-                    {/* Port identity */}
-                    <PortIdentitySection
-                      port={port}
-                      onChange={setPort}
-                      onLoadDefaults={loadTypicalValues}
-                    />
-
-                    {/* Terminals - Baseline Mode */}
-                    <section className="space-y-6">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-[11px] font-bold uppercase tracking-widest text-[#8c8c8c]">
-                          Terminals ({terminals.length})
-                        </h3>
-                        <button
-                          type="button"
-                          onClick={addTerminal}
-                          className="px-4 py-2 rounded-lg bg-[#3c5e86] text-white text-xs font-semibold hover:bg-[#68a4c2] transition-colors"
-                        >
-                          + Add Terminal
-                        </button>
-                      </div>
-
-                      {terminals.map((terminal, idx) => (
-                        <PieceTerminalCard
-                          key={`baseline-${terminal.id}`}
-                          terminal={terminal}
-                          onChange={(updated) => updateTerminal(terminal.id, updated)}
-                          onRemove={() => removeTerminal(terminal.id)}
-                          canRemove={terminals.length > 1}
-                          defaultCollapsed={terminals.length > 2 && idx > 0}
-                          mode="baseline"
-                        />
-                      ))}
-                    </section>
-                  </div>
-
-                  {/* Save & proceed to scenario */}
-                  <div className="mt-8 flex justify-center">
-                    <button
-                      onClick={() => handleTabChange('scenario')}
-                      disabled={!isBaselineComplete}
-                      className="px-8 py-3 rounded-xl bg-[#286464] text-white text-sm font-semibold hover:bg-[#1e4e4e] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      {scenarioList.length > 0 ? 'Save & Return to Scenarios' : 'Save & Create Scenario'} →
-                    </button>
-                    {!isBaselineComplete && (
-                      <p className="ml-4 self-center text-xs text-[#8c8c8c]">
-                        Configure port size and at least one terminal with throughput and equipment
+                    <div>
+                      <h2 className="text-xl font-semibold text-[#414141]">Port Baseline</h2>
+                      <p className="text-sm text-[#8c8c8c]">
+                        {scenarioList.length > 0
+                          ? 'Shared across all scenarios'
+                          : 'Configure your current port setup - terminals, throughput, and existing equipment'}
                       </p>
-                    )}
+                    </div>
                   </div>
-                </>
-              )}
+                  {scenarioList.length > 0 && !isBaselineEditing && (
+                    <button
+                      onClick={() => setIsBaselineEditing(true)}
+                      className="px-4 py-1.5 rounded-lg border border-[#3c5e86] text-[#3c5e86] text-xs font-medium hover:bg-[#3c5e86] hover:text-white transition-colors whitespace-nowrap"
+                    >
+                      Edit Baseline
+                    </button>
+                  )}
+                </div>
+
+                {scenarioList.length > 0 && !isBaselineEditing ? (
+                  <BaselineSummary
+                    baseline={decomposed.baseline}
+                    terminals={terminals}
+                    portServicesBaseline={portServicesBaseline}
+                  />
+                ) : (
+                  <>
+                    <div className="space-y-6">
+                      {/* Terminals - Baseline Mode */}
+                      <section className="space-y-6">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-[11px] font-bold uppercase tracking-widest text-[#8c8c8c]">
+                            Terminals ({terminals.length})
+                          </h3>
+                          <button
+                            type="button"
+                            onClick={addTerminal}
+                            className="px-4 py-2 rounded-lg bg-[#3c5e86] text-white text-xs font-semibold hover:bg-[#68a4c2] transition-colors"
+                          >
+                            + Add Terminal
+                          </button>
+                        </div>
+
+                        {terminals.map((terminal, idx) => (
+                          <PieceTerminalCard
+                            key={`baseline-${terminal.id}`}
+                            terminal={terminal}
+                            onChange={(updated) => updateTerminal(terminal.id, updated)}
+                            onRemove={() => removeTerminal(terminal.id)}
+                            canRemove={terminals.length > 1}
+                            defaultCollapsed={terminals.length > 2 && idx > 0}
+                            mode="baseline"
+                          />
+                        ))}
+                      </section>
+
+                      {/* Offshore Equipment (Port-Wide) */}
+                      <section className="space-y-3 mt-6">
+                        <h3 className="text-[11px] font-bold uppercase tracking-widest text-[#8c8c8c]">
+                          Offshore Equipment
+                        </h3>
+                        <div className="bg-white rounded-xl border border-gray-200 p-6">
+                          <PortServicesSection
+                            baseline={portServicesBaseline ?? DEFAULT_PORT_SERVICES_BASELINE}
+                            scenario={portServicesScenario ?? DEFAULT_PORT_SERVICES_SCENARIO}
+                            onBaselineChange={setPortServicesBaseline}
+                            onScenarioChange={setPortServicesScenario}
+                            mode="baseline"
+                          />
+                        </div>
+                      </section>
+                    </div>
+
+                    {/* Save & proceed to scenario */}
+                    <div className="mt-8 flex justify-center">
+                      <button
+                        onClick={() => handleTabChange('scenario')}
+                        disabled={!isBaselineComplete}
+                        className="px-8 py-3 rounded-xl bg-[#286464] text-white text-sm font-semibold hover:bg-[#1e4e4e] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        {scenarioList.length > 0 ? 'Save & Return to Scenarios' : 'Save & Create Scenario'} →
+                      </button>
+                      {!isBaselineComplete && (
+                        <p className="ml-4 self-center text-xs text-[#8c8c8c]">
+                          Configure port size and at least one terminal with throughput and equipment
+                        </p>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           )}
 
@@ -799,7 +859,7 @@ export default function PiecePage() {
             <div className="bg-[#eefae8] rounded-2xl p-8 border border-[#dcf0d6]">
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-8 h-8 rounded-full bg-[#286464] text-white flex items-center justify-center text-sm font-bold">
-                  2
+                  3
                 </div>
                 <div>
                   <h2 className="text-xl font-semibold text-[#414141]">Electrification Scenario</h2>
@@ -833,6 +893,22 @@ export default function PiecePage() {
                       mode="scenario"
                     />
                   ))}
+                </section>
+
+                {/* Offshore Equipment Changes (Port-Wide) */}
+                <section className="space-y-3 mt-6">
+                  <h3 className="text-[11px] font-bold uppercase tracking-widest text-[#8c8c8c]">
+                    Offshore Equipment Changes
+                  </h3>
+                  <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    <PortServicesSection
+                      baseline={portServicesBaseline ?? DEFAULT_PORT_SERVICES_BASELINE}
+                      scenario={portServicesScenario ?? DEFAULT_PORT_SERVICES_SCENARIO}
+                      onBaselineChange={setPortServicesBaseline}
+                      onScenarioChange={setPortServicesScenario}
+                      mode="scenario"
+                    />
+                  </div>
                 </section>
               </div>
 
@@ -876,7 +952,7 @@ export default function PiecePage() {
             <div className="bg-[#fcf8e4] rounded-2xl p-8 border border-[#fceec8]">
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-8 h-8 rounded-full bg-[#bc8e54] text-white flex items-center justify-center text-sm font-bold">
-                  3
+                  4
                 </div>
                 <div>
                   <h2 className="text-xl font-semibold text-[#414141]">Results</h2>
@@ -948,7 +1024,7 @@ export default function PiecePage() {
             <div className="bg-[#f5f0f8] rounded-2xl p-8 border border-[#ede4f2]">
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-8 h-8 rounded-full bg-[#7c5e8a] text-white flex items-center justify-center text-sm font-bold">
-                  4
+                  5
                 </div>
                 <div>
                   <h2 className="text-xl font-semibold text-[#414141]">Compare Scenarios</h2>

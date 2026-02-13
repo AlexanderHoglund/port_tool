@@ -20,6 +20,8 @@ import type {
   ScenarioConfig,
   ProjectRow,
   ScenarioRow,
+  PortServicesBaseline,
+  PortServicesScenario,
 } from '@/lib/types'
 import { computeAssumptionFingerprint } from '@/lib/assumption-hash'
 import { reconstitutePieceTerminals, decomposePieceTerminals, createEmptyScenarioConfig } from '@/lib/piece-reconstitute'
@@ -35,7 +37,8 @@ export function createDefaultTerminal(): PieceTerminalConfig {
     name: `Terminal ${terminalCounter}`,
     terminal_type: 'container',
     annual_teu: 0,
-    berths: [],  // berths now use vessel_calls format
+    vessel_calls: [],
+    berths: [],
     baseline_equipment: {},
     scenario_equipment: {},
     berth_scenarios: [],
@@ -53,32 +56,67 @@ function syncTerminalCounter(terminals: PieceTerminalConfig[]) {
   terminalCounter = max
 }
 
-// ── Backward compatibility: migrate old flat berth format → vessel_calls ──
-
-function migrateBerth(berth: Record<string, unknown>): BerthDefinition {
-  if (Array.isArray(berth.vessel_calls)) return berth as unknown as BerthDefinition
-  // Old format: flat current_vessel_segment_key, annual_calls, avg_berth_hours
-  return {
-    id: (berth.id as string) ?? crypto.randomUUID(),
-    berth_number: (berth.berth_number as number) ?? 1,
-    berth_name: (berth.berth_name as string) ?? '',
-    max_vessel_segment_key: (berth.max_vessel_segment_key as string) ?? '',
-    vessel_calls: [{
-      id: crypto.randomUUID(),
-      vessel_segment_key: (berth.current_vessel_segment_key as string) ?? (berth.max_vessel_segment_key as string) ?? '',
-      annual_calls: (berth.annual_calls as number) ?? 0,
-      avg_berth_hours: (berth.avg_berth_hours as number) ?? 0,
-    }],
-    ops_existing: !!berth.ops_existing,
-    dc_existing: !!berth.dc_existing,
-  }
-}
+// ── Backward compatibility: migrate old berth formats ──
+// Old berths may have vessel_calls arrays or flat fields. Both are lifted to terminal level.
 
 function migrateTerminals(terminals: PieceTerminalConfig[]): PieceTerminalConfig[] {
-  return terminals.map((t) => ({
-    ...t,
-    berths: t.berths.map((b) => migrateBerth(b as unknown as Record<string, unknown>)),
-  }))
+  return terminals.map((t) => {
+    // If terminal already has vessel_calls, just strip any leftover berth vessel_calls
+    if (t.vessel_calls && t.vessel_calls.length > 0) {
+      return {
+        ...t,
+        berths: t.berths.map((b) => {
+          const raw = b as unknown as Record<string, unknown>
+          // Strip vessel_calls from berth if present
+          const { vessel_calls: _vc, ...rest } = raw
+          return rest as unknown as BerthDefinition
+        }),
+      }
+    }
+
+    // Lift vessel_calls from berths to terminal level
+    const liftedCalls: { id: string; vessel_segment_key: string; annual_calls: number; avg_berth_hours: number }[] = []
+    const cleanedBerths: BerthDefinition[] = []
+
+    for (const berth of t.berths) {
+      const raw = berth as unknown as Record<string, unknown>
+
+      if (Array.isArray(raw.vessel_calls)) {
+        // Intermediate format: berth has vessel_calls array
+        for (const call of raw.vessel_calls as { id?: string; vessel_segment_key: string; annual_calls: number; avg_berth_hours: number }[]) {
+          liftedCalls.push({
+            id: call.id ?? crypto.randomUUID(),
+            vessel_segment_key: call.vessel_segment_key,
+            annual_calls: call.annual_calls,
+            avg_berth_hours: call.avg_berth_hours,
+          })
+        }
+      } else if (raw.current_vessel_segment_key || raw.annual_calls) {
+        // Very old format: flat fields on berth
+        liftedCalls.push({
+          id: crypto.randomUUID(),
+          vessel_segment_key: (raw.current_vessel_segment_key as string) ?? (raw.max_vessel_segment_key as string) ?? '',
+          annual_calls: (raw.annual_calls as number) ?? 0,
+          avg_berth_hours: (raw.avg_berth_hours as number) ?? 0,
+        })
+      }
+
+      cleanedBerths.push({
+        id: (raw.id as string) ?? crypto.randomUUID(),
+        berth_number: (raw.berth_number as number) ?? 1,
+        berth_name: (raw.berth_name as string) ?? '',
+        max_vessel_segment_key: (raw.max_vessel_segment_key as string) ?? '',
+        ops_existing: !!raw.ops_existing,
+        dc_existing: !!raw.dc_existing,
+      })
+    }
+
+    return {
+      ...t,
+      vessel_calls: liftedCalls,
+      berths: cleanedBerths,
+    }
+  })
 }
 
 // ── Initial state ────────────────────────────────────────
@@ -92,6 +130,10 @@ type PieceContextValue = {
   port: PortConfig
   terminals: PieceTerminalConfig[]
   result: PiecePortResult | null
+
+  // Port-level offshore equipment
+  portServicesBaseline: PortServicesBaseline | null
+  portServicesScenario: PortServicesScenario | null
 
   // Project/scenario tracking
   activeProjectId: string | null
@@ -113,6 +155,8 @@ type PieceContextValue = {
   // Setters (inputs)
   setPort: (port: PortConfig) => void
   setTerminals: Dispatch<SetStateAction<PieceTerminalConfig[]>>
+  setPortServicesBaseline: (ps: PortServicesBaseline | null) => void
+  setPortServicesScenario: (ps: PortServicesScenario | null) => void
   /** Set result + record the assumption fingerprint at calculation time */
   setResult: (result: PiecePortResult | null, fingerprint?: string) => void
   markResultStale: () => void
@@ -149,6 +193,10 @@ export function PieceProvider({ children }: { children: ReactNode }) {
   const [resultsClearedByAssumptions, setResultsClearedByAssumptions] = useState(false)
   const [loadedScenarioId, setLoadedScenarioId] = useState<string | null>(null)
   const [loadedScenarioName, setLoadedScenarioName] = useState<string | null>(null)
+
+  // Port-level offshore equipment
+  const [portServicesBaseline, setPortServicesBaselineRaw] = useState<PortServicesBaseline | null>(null)
+  const [portServicesScenario, setPortServicesScenarioRaw] = useState<PortServicesScenario | null>(null)
 
   // Project/scenario tracking
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
@@ -202,6 +250,16 @@ export function PieceProvider({ children }: { children: ReactNode }) {
     },
     [],
   )
+
+  const setPortServicesBaseline = useCallback((ps: PortServicesBaseline | null) => {
+    setPortServicesBaselineRaw(ps)
+    inputGeneration.current++
+  }, [])
+
+  const setPortServicesScenario = useCallback((ps: PortServicesScenario | null) => {
+    setPortServicesScenarioRaw(ps)
+    inputGeneration.current++
+  }, [])
 
   const setResult = useCallback((r: PiecePortResult | null, fingerprint?: string) => {
     setResultInternal(r)
@@ -279,9 +337,12 @@ export function PieceProvider({ children }: { children: ReactNode }) {
     setPortRaw(portCfg)
     // Create empty terminals from baseline (no scenario data yet)
     const emptyScenario = createEmptyScenarioConfig(project.baseline_config)
-    const reconstituted = reconstitutePieceTerminals(project.baseline_config, emptyScenario)
+    const { terminals: reconstituted, portServicesBaseline: psBaseline } =
+      reconstitutePieceTerminals(project.baseline_config, emptyScenario)
     setTerminalsRaw(reconstituted)
     syncTerminalCounter(reconstituted)
+    setPortServicesBaselineRaw(psBaseline)
+    setPortServicesScenarioRaw(null)
     setResultInternal(null)
     setResultFingerprint(null)
     inputGeneration.current++
@@ -306,10 +367,13 @@ export function PieceProvider({ children }: { children: ReactNode }) {
     const portCfg = project.port_config
     setPortRaw(portCfg)
     // Reconstitute flat terminals from baseline + scenario
-    const reconstituted = reconstitutePieceTerminals(project.baseline_config, scenario.scenario_config)
+    const { terminals: reconstituted, portServicesBaseline: psBaseline, portServicesScenario: psScenario } =
+      reconstitutePieceTerminals(project.baseline_config, scenario.scenario_config)
     const migrated = migrateTerminals(reconstituted)
     setTerminalsRaw(migrated)
     syncTerminalCounter(migrated)
+    setPortServicesBaselineRaw(psBaseline)
+    setPortServicesScenarioRaw(psScenario)
     setResultInternal(scenario.result)
     setResultFingerprint(scenario.assumption_hash ?? null)
     // Optimistically set currentFingerprint to the saved hash so the stale
@@ -339,6 +403,8 @@ export function PieceProvider({ children }: { children: ReactNode }) {
     setPortRaw(INITIAL_PORT)
     terminalCounter = 0
     setTerminalsRaw([createDefaultTerminal()])
+    setPortServicesBaselineRaw(null)
+    setPortServicesScenarioRaw(null)
     setResultInternal(null)
     setResultFingerprint(null)
     inputGeneration.current = 0
@@ -362,6 +428,8 @@ export function PieceProvider({ children }: { children: ReactNode }) {
         port,
         terminals,
         result,
+        portServicesBaseline,
+        portServicesScenario,
         activeProjectId,
         activeProjectName,
         activeScenarioId,
@@ -375,6 +443,8 @@ export function PieceProvider({ children }: { children: ReactNode }) {
         currentAssumptionFingerprint: currentFingerprint,
         setPort,
         setTerminals,
+        setPortServicesBaseline,
+        setPortServicesScenario,
         setResult,
         markResultStale,
         setLoadedScenario,

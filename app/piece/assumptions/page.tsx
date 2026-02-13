@@ -1,42 +1,48 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import Image from 'next/image'
 import { createBrowserClient } from '@supabase/ssr'
 import type { PieceAssumptionOverride } from '@/lib/types'
 import { usePieceContext } from '../context/PieceContext'
 
 type TableKey = 'economic_assumptions' | 'piece_equipment' | 'piece_evse' | 'piece_fleet_ops' | 'piece_grid'
 
-const ASSUMPTION_TABLES: { key: TableKey; label: string; description: string; rowKeyCol: string }[] = [
+const ASSUMPTION_TABLES: { key: TableKey; label: string; description: string; rowKeyCol: string; icon: string }[] = [
   {
     key: 'economic_assumptions',
     label: 'Economic Parameters',
     description: 'Electricity price, diesel price, emission factors, discount rates, and other financial assumptions',
     rowKeyCol: 'assumption_key',
+    icon: '/icons/Icons/Business/Price tag dollar.svg',
   },
   {
     key: 'piece_equipment',
     label: 'Equipment Specifications',
     description: 'CAPEX, OPEX, peak power, energy intensity, and throughput ratios for terminal equipment',
     rowKeyCol: 'equipment_key',
+    icon: '/icons/Icons/Efficiency/Gears.svg',
   },
   {
     key: 'piece_evse',
     label: 'EVSE Chargers',
     description: 'Charger types, power ratings, costs, and units per charger for battery-powered equipment',
     rowKeyCol: 'evse_key',
+    icon: '/icons/Icons/Energy & Fuels/Plug.svg',
   },
   {
     key: 'piece_fleet_ops',
     label: 'Vessel & OPS',
     description: 'Shore power demand, OPS infrastructure costs, and berth parameters per vessel segment',
     rowKeyCol: 'vessel_segment_key',
+    icon: '/icons/Icons/Shipping/Cargo Ship.svg',
   },
   {
     key: 'piece_grid',
     label: 'Grid Infrastructure',
     description: 'Substation costs, cable costs, voltage levels, and simultaneity factors',
     rowKeyCol: 'component_key',
+    icon: '/icons/Icons/Energy & Fuels/Electric power.svg',
   },
 ]
 
@@ -308,9 +314,16 @@ export default function AssumptionsPage() {
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className={`text-sm font-medium ${
+                        <span className={`flex items-center gap-2 text-sm font-medium ${
                           activeTable === table.key ? 'text-[#3c5e86]' : 'text-[#414141]'
                         }`}>
+                          <Image
+                            src={table.icon}
+                            alt=""
+                            width={18}
+                            height={18}
+                            className={activeTable === table.key ? 'opacity-60' : 'opacity-35'}
+                          />
                           {table.label}
                         </span>
                         {(overrideCounts[table.key] ?? 0) > 0 && (

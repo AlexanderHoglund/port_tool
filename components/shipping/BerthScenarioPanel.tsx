@@ -138,7 +138,6 @@ export default function BerthScenarioPanel({ berths, scenarios, onChange }: Prop
               <th className="text-left py-3 px-3 text-[11px] font-bold uppercase text-[#666]">
                 Max Vessel
               </th>
-              <th className="text-center py-3 px-3 text-[11px] font-bold uppercase text-[#666] w-20">Calls/Yr</th>
               <th className="text-center py-3 px-3 text-[11px] font-bold uppercase bg-[#dceefa] text-[#0d47a1] w-14">
                 OPS
               </th>
@@ -159,7 +158,6 @@ export default function BerthScenarioPanel({ berths, scenarios, onChange }: Prop
               const scenario = getScenario(berth.id)
               const maxData = OPS_DATA[berth.max_vessel_segment_key] ?? { powerMw: 2.0, capexUsd: 754000 }
               const maxLabel = SEGMENT_NAMES[berth.max_vessel_segment_key] ?? berth.max_vessel_segment_key
-              const berthTotalCalls = berth.vessel_calls.reduce((s, c) => s + c.annual_calls, 0)
 
               const hasOps = berth.ops_existing || scenario.ops_enabled
               const opsIsNew = !berth.ops_existing && scenario.ops_enabled
@@ -175,11 +173,6 @@ export default function BerthScenarioPanel({ berths, scenarios, onChange }: Prop
                   </td>
                   <td className="py-2 px-3 text-xs">
                     <div className="text-[#333] font-medium">{maxLabel}</div>
-                  </td>
-
-                  {/* Calls/Yr summary */}
-                  <td className="py-2 px-3 text-center text-xs text-[#555]">
-                    {berthTotalCalls.toLocaleString()}
                   </td>
 
                   {/* OPS checkbox */}
@@ -258,7 +251,7 @@ export default function BerthScenarioPanel({ berths, scenarios, onChange }: Prop
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-gray-200 bg-[#f5f5f5]">
-              <td colSpan={4} className="py-3 px-3 text-right text-[11px] font-semibold text-[#666]">
+              <td colSpan={3} className="py-3 px-3 text-right text-[11px] font-semibold text-[#666]">
                 Totals:
               </td>
               <td className="py-3 px-3 text-center text-xs font-bold text-[#0d47a1] bg-[#dceefa]">

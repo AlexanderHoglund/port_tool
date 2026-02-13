@@ -171,19 +171,6 @@ function validateBerthDefinition(
     return { ok: false, error: `${prefix}.max_vessel_segment_key must be a non-empty string.` }
   }
 
-  // Validate vessel_calls array
-  if (!Array.isArray(b.vessel_calls)) {
-    return { ok: false, error: `${prefix}.vessel_calls must be an array.` }
-  }
-  const vesselCalls: BerthVesselCall[] = []
-  for (let i = 0; i < b.vessel_calls.length; i++) {
-    const callValidation = validateVesselCall(b.vessel_calls[i], i, prefix)
-    if (!callValidation.ok) {
-      return { ok: false, error: callValidation.error }
-    }
-    vesselCalls.push(callValidation.data)
-  }
-
   return {
     ok: true,
     data: {
@@ -191,7 +178,6 @@ function validateBerthDefinition(
       berth_number: b.berth_number,
       berth_name: b.berth_name,
       max_vessel_segment_key: b.max_vessel_segment_key,
-      vessel_calls: vesselCalls,
       ops_existing: !!b.ops_existing,
       dc_existing: !!b.dc_existing,
     },
@@ -371,6 +357,21 @@ function validateTerminal(
     berths.push(berthValidation.data)
   }
 
+  // Vessel calls (BerthVesselCall[]) — terminal-level
+  const vesselCalls: BerthVesselCall[] = []
+  if (t.vessel_calls !== undefined) {
+    if (!Array.isArray(t.vessel_calls)) {
+      return { ok: false, error: `${prefix}.vessel_calls must be an array.` }
+    }
+    for (let i = 0; i < t.vessel_calls.length; i++) {
+      const callValidation = validateVesselCall(t.vessel_calls[i], i, prefix)
+      if (!callValidation.ok) {
+        return { ok: false, error: callValidation.error }
+      }
+      vesselCalls.push(callValidation.data)
+    }
+  }
+
   // Berth scenarios (BerthScenarioConfig[]) - optional
   let berthScenarios: BerthScenarioConfig[] = []
   if (t.berth_scenarios !== undefined) {
@@ -441,6 +442,7 @@ function validateTerminal(
       annual_teu: t.annual_teu,
       annual_passengers: typeof t.annual_passengers === 'number' ? t.annual_passengers : undefined,
       annual_ceu: typeof t.annual_ceu === 'number' ? t.annual_ceu : undefined,
+      vessel_calls: vesselCalls,
       berths,
       berth_scenarios: berthScenarios,
       baseline_equipment: baselineValidation.data,

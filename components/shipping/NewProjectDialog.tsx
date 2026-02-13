@@ -41,6 +41,8 @@ export default function NewProjectDialog({ open, onClose, onCreated }: Props) {
           terminal_type: 'container' as const,
           berths: [],
           baseline_equipment: {},
+          annual_teu: 0,
+          vessel_calls: [],
         }],
       }
 

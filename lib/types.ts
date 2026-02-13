@@ -21,7 +21,7 @@ export type BaselineEquipmentEntry = {
   existing_electric: number  // e.g., 2 already electric tractors
 }
 
-/** Individual vessel call entry within a berth (multiple vessel types can call at one berth) */
+/** Vessel call entry — defines a vessel type's annual call frequency and berth time */
 export type BerthVesselCall = {
   id: string
   vessel_segment_key: string
@@ -29,13 +29,12 @@ export type BerthVesselCall = {
   avg_berth_hours: number
 }
 
-/** Berth definition for baseline (physical berth + traffic + existing infrastructure) */
+/** Berth definition — physical berth infrastructure (vessel calls are at terminal level) */
 export type BerthDefinition = {
   id: string
   berth_number: number
   berth_name: string
   max_vessel_segment_key: string       // Design capacity — largest vessel the berth can handle (drives CAPEX, cable sizing)
-  vessel_calls: BerthVesselCall[]      // Multiple vessel types calling at this berth (drives OPEX, energy)
   ops_existing: boolean        // Does this berth already have OPS infrastructure?
   dc_existing: boolean         // Does this berth already have DC charging infrastructure?
 }
@@ -147,10 +146,16 @@ export type PieceTerminalConfig = {
   name: string
   terminal_type: TerminalType
 
-  // Throughput
+  // ══════════════════════════════════════════════════════════
+  // OPERATIONS — Throughput & vessel traffic (baseline data)
+  // ══════════════════════════════════════════════════════════
+
   annual_teu: number              // For container
   annual_passengers?: number      // For cruise
   annual_ceu?: number             // For RoRo (Car Equivalent Units)
+
+  /** Vessel calls at terminal level — shared across all berths */
+  vessel_calls: BerthVesselCall[]
 
   // ══════════════════════════════════════════════════════════
   // BASELINE (Section 1) — Current state
@@ -159,14 +164,11 @@ export type PieceTerminalConfig = {
   /** Equipment: existing diesel + electric counts per equipment type */
   baseline_equipment: Record<string, BaselineEquipmentEntry>
 
-  /** Berths: physical berth definitions (name, segment, calls, hours) */
+  /** Berths: physical berth definitions (name, max vessel, OPS/DC flags) */
   berths: BerthDefinition[]
 
   /** Buildings & lighting (optional) */
   buildings_lighting?: BuildingsLightingConfig
-
-  /** Offshore equipment: tugs and pilot boats (per-terminal) */
-  port_services_baseline?: PortServicesBaseline
 
   // ══════════════════════════════════════════════════════════
   // SCENARIO (Section 2) — Changes to make
@@ -177,9 +179,6 @@ export type PieceTerminalConfig = {
 
   /** Berth scenarios: OPS/DC toggles per berth */
   berth_scenarios: BerthScenarioConfig[]
-
-  /** Offshore equipment scenario: convert/add tugs and pilot boats */
-  port_services_scenario?: PortServicesScenario
 
   // Charger overrides (auto-calculated from equipment, but can be manually adjusted)
   charger_overrides?: Record<string, number>
@@ -215,48 +214,41 @@ export type CalculationRequest = {
 // PROJECT / SCENARIO TYPES — Multi-scenario architecture
 // ═══════════════════════════════════════════════════════════
 
-/** Baseline berth definition WITHOUT vessel_calls (those are scenario-specific) */
-export type BaselineBerthDefinition = {
-  id: string
-  berth_number: number
-  berth_name: string
-  max_vessel_segment_key: string
-  ops_existing: boolean
-  dc_existing: boolean
-}
-
 /** Per-terminal baseline stored at project level */
 export type BaselineTerminalConfig = {
   id: string
   name: string
   terminal_type: TerminalType
-  berths: BaselineBerthDefinition[]
+  berths: BerthDefinition[]
   baseline_equipment: Record<string, BaselineEquipmentEntry>
   cable_length_m?: number
-  port_services_baseline?: PortServicesBaseline
+  // Operations (throughput + vessel traffic)
+  annual_teu: number
+  annual_passengers?: number
+  annual_ceu?: number
+  vessel_calls: BerthVesselCall[]
 }
 
 /** Project-level baseline blob (stored as JSONB in piece_projects.baseline_config) */
 export type ProjectBaseline = {
   terminals: BaselineTerminalConfig[]
+  /** Port-wide offshore equipment (tugs, pilot boats) */
+  port_services_baseline?: PortServicesBaseline
 }
 
-/** Per-terminal scenario data (keyed by terminal_id) */
+/** Per-terminal scenario data (keyed by terminal_id) — electrification choices only */
 export type ScenarioTerminalConfig = {
   terminal_id: string
-  annual_teu: number
-  annual_passengers?: number
-  annual_ceu?: number
-  vessel_calls_by_berth: Record<string, BerthVesselCall[]>
   scenario_equipment: Record<string, ScenarioEquipmentEntry>
   berth_scenarios: BerthScenarioConfig[]
   charger_overrides?: Record<string, number>
-  port_services_scenario?: PortServicesScenario
 }
 
 /** Scenario-level data blob (stored as JSONB in piece_scenarios.scenario_config) */
 export type ScenarioConfig = {
   terminals: ScenarioTerminalConfig[]
+  /** Port-wide offshore equipment scenario (convert/add tugs and pilot boats) */
+  port_services_scenario?: PortServicesScenario
 }
 
 /** Summary type for project list views */

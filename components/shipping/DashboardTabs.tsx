@@ -1,5 +1,7 @@
 'use client'
 
+import Image from 'next/image'
+
 export type DashboardTab = 'baseline' | 'scenario' | 'results' | 'compare'
 
 type Props = {
@@ -11,11 +13,11 @@ type Props = {
   isCompareReady?: boolean
 }
 
-const TABS: { key: DashboardTab; label: string; color: string; activeBg: string; checkBg: string }[] = [
-  { key: 'baseline', label: 'Baseline', color: '#3c5e86', activeBg: 'bg-[#d4eefa]', checkBg: 'bg-[#3c5e86]' },
-  { key: 'scenario', label: 'Scenario', color: '#286464', activeBg: 'bg-[#dcf0d6]', checkBg: 'bg-[#286464]' },
-  { key: 'results', label: 'Results', color: '#bc8e54', activeBg: 'bg-[#fceec8]', checkBg: 'bg-[#bc8e54]' },
-  { key: 'compare', label: 'Compare', color: '#7c5e8a', activeBg: 'bg-[#ede4f2]', checkBg: 'bg-[#7c5e8a]' },
+const TABS: { key: DashboardTab; label: string; color: string; activeBg: string; checkBg: string; icon: string }[] = [
+  { key: 'baseline', label: 'Baseline', color: '#3c5e86', activeBg: 'bg-[#d4eefa]', checkBg: 'bg-[#3c5e86]', icon: '/icons/Icons/Shipping/Wharf.svg' },
+  { key: 'scenario', label: 'Scenario', color: '#286464', activeBg: 'bg-[#dcf0d6]', checkBg: 'bg-[#286464]', icon: '/icons/Icons/Energy & Fuels/Electric power.svg' },
+  { key: 'results', label: 'Results', color: '#bc8e54', activeBg: 'bg-[#fceec8]', checkBg: 'bg-[#bc8e54]', icon: '/icons/Icons/Efficiency/Bar chart growth.svg' },
+  { key: 'compare', label: 'Compare', color: '#7c5e8a', activeBg: 'bg-[#ede4f2]', checkBg: 'bg-[#7c5e8a]', icon: '/icons/Icons/Efficiency/Arrow two directions.svg' },
 ]
 
 const STEP_NUMBERS: Record<DashboardTab, string> = {
@@ -72,6 +74,13 @@ export default function DashboardTabs({
                 >
                   {complete ? '\u2713' : STEP_NUMBERS[tab.key]}
                 </span>
+                <Image
+                  src={tab.icon}
+                  alt=""
+                  width={16}
+                  height={16}
+                  className={active ? 'opacity-50' : 'opacity-30'}
+                />
                 {tab.label}
               </button>
             )

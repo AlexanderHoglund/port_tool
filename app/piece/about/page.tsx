@@ -1,3 +1,5 @@
+import Image from 'next/image'
+
 export default function AboutPage() {
   return (
     <div className="py-10">
@@ -33,15 +35,18 @@ export default function AboutPage() {
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {[
-                  ['Equipment Emissions', 'Energy consumption and CO2 from cranes, tractors, reach stackers, and other terminal equipment'],
-                  ['Shore Power (OPS)', 'Onshore power supply analysis per berth, including CAPEX for transformers, converters, and civil works'],
-                  ['Charger Infrastructure', 'EVSE sizing for battery-powered mobile equipment based on fleet composition'],
-                  ['Grid Infrastructure', 'Substation ratings, cable sizing, and grid connection costs from equipment to central distribution'],
-                  ['Financial Analysis', 'Total CAPEX, annual OPEX comparison, diesel savings, and simple payback period'],
-                  ['CO2 Reduction', 'Baseline vs scenario emissions with well-to-wheel emission factors'],
-                ].map(([title, desc]) => (
+                  ['Equipment Emissions', 'Energy consumption and CO2 from cranes, tractors, reach stackers, and other terminal equipment', '/icons/Icons/Transportation/Emissions.svg'],
+                  ['Shore Power (OPS)', 'Onshore power supply analysis per berth, including CAPEX for transformers, converters, and civil works', '/icons/Icons/Energy & Fuels/Plug.svg'],
+                  ['Charger Infrastructure', 'EVSE sizing for battery-powered mobile equipment based on fleet composition', '/icons/Icons/Energy & Fuels/Battery.svg'],
+                  ['Grid Infrastructure', 'Substation ratings, cable sizing, and grid connection costs from equipment to central distribution', '/icons/Icons/Energy & Fuels/Electric power.svg'],
+                  ['Financial Analysis', 'Total CAPEX, annual OPEX comparison, diesel savings, and simple payback period', '/icons/Icons/Business/Investment.svg'],
+                  ['CO2 Reduction', 'Baseline vs scenario emissions with well-to-wheel emission factors', '/icons/Icons/Sustainability/Decarbonization.svg'],
+                ].map(([title, desc, icon]) => (
                   <div key={title} className="p-4 rounded-lg bg-gray-50">
-                    <div className="text-sm font-semibold text-[#414141] mb-1">{title}</div>
+                    <div className="flex items-center gap-2 text-sm font-semibold text-[#414141] mb-1">
+                      <Image src={icon!} alt="" width={22} height={22} className="opacity-40" />
+                      {title}
+                    </div>
                     <div className="text-xs text-[#8c8c8c] leading-relaxed">{desc}</div>
                   </div>
                 ))}

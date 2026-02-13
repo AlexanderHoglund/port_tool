@@ -1,14 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import type { PortConfig, ProjectBaseline, PieceTerminalConfig } from '@/lib/types'
-import { PORT_SIZES } from '@/lib/constants'
+import type { ProjectBaseline, PieceTerminalConfig, PortServicesBaseline } from '@/lib/types'
 
 type Props = {
-  port: PortConfig
   baseline: ProjectBaseline
   terminals: PieceTerminalConfig[]
-  onEditBaseline: () => void
+  portServicesBaseline?: PortServicesBaseline | null
 }
 
 const SEGMENT_LABELS: Record<string, string> = {
@@ -59,9 +57,7 @@ function TerminalDetail({ terminal }: { terminal: PieceTerminalConfig }) {
     (s, e) => s + (e?.existing_electric || 0), 0
   )
 
-  const ps = terminal.port_services_baseline
   const bl = terminal.buildings_lighting
-  const hasPortServices = ps && (ps.tugs_diesel + ps.tugs_electric + ps.pilot_boats_diesel + ps.pilot_boats_electric > 0)
   const hasBuildings = bl && (bl.warehouse_sqm + bl.office_sqm + bl.workshop_sqm > 0 || bl.high_mast_lights + bl.area_lights + bl.roadway_lights > 0)
 
   return (
@@ -105,38 +101,69 @@ function TerminalDetail({ terminal }: { terminal: PieceTerminalConfig }) {
                       <th className="text-left py-1.5 text-[10px] font-bold text-[#8c8c8c]">Max Vessel</th>
                       <th className="text-center py-1.5 text-[10px] font-bold text-[#8c8c8c]">OPS</th>
                       <th className="text-center py-1.5 text-[10px] font-bold text-[#8c8c8c]">DC</th>
-                      <th className="text-left py-1.5 text-[10px] font-bold text-[#8c8c8c]">Vessel Calls</th>
                     </tr>
                   </thead>
                   <tbody>
                     {terminal.berths.map((b) => (
-                      <tr key={b.id} className="border-b border-gray-100 align-top">
+                      <tr key={b.id} className="border-b border-gray-100">
                         <td className="py-1.5 text-[#414141] font-medium">{b.berth_name || `Berth ${b.berth_number}`}</td>
                         <td className="py-1.5 text-[#585858]">
                           {SEGMENT_LABELS[b.max_vessel_segment_key] || b.max_vessel_segment_key}
                         </td>
                         <td className="py-1.5 text-center">{b.ops_existing ? '\u2713' : '-'}</td>
                         <td className="py-1.5 text-center">{b.dc_existing ? '\u2713' : '-'}</td>
-                        <td className="py-1.5">
-                          {b.vessel_calls.length > 0 ? (
-                            <div className="space-y-0.5">
-                              {b.vessel_calls.map((vc) => (
-                                <div key={vc.id} className="text-xs text-[#585858]">
-                                  {SEGMENT_LABELS[vc.vessel_segment_key] || vc.vessel_segment_key}
-                                  {' \u2014 '}
-                                  {fmt(vc.annual_calls)} calls, {vc.avg_berth_hours}h avg
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className="text-xs text-[#bebebe]">No calls configured</span>
-                          )}
-                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+            </div>
+          )}
+
+          {/* Operations */}
+          {((terminal.vessel_calls ?? []).length > 0 || terminal.annual_teu > 0) && (
+            <div>
+              <h4 className="text-[10px] font-bold uppercase tracking-widest text-[#8c8c8c] mb-2">
+                Operations
+              </h4>
+              <div className="flex items-center gap-6 text-sm mb-2">
+                <div>
+                  <span className="text-[#8c8c8c] text-xs">Throughput</span>
+                  <div className="text-[#414141] font-medium">{fmt(terminal.annual_teu)} {throughputLabel}/yr</div>
+                </div>
+                <div>
+                  <span className="text-[#8c8c8c] text-xs">Total Calls</span>
+                  <div className="text-[#414141] font-medium">
+                    {fmt((terminal.vessel_calls ?? []).reduce((s, c) => s + c.annual_calls, 0))}/yr
+                  </div>
+                </div>
+              </div>
+              {(terminal.vessel_calls ?? []).length > 0 && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="text-left py-1.5 text-[10px] font-bold text-[#8c8c8c]">Vessel Type</th>
+                        <th className="text-center py-1.5 text-[10px] font-bold text-[#8c8c8c]">Calls/Year</th>
+                        <th className="text-center py-1.5 text-[10px] font-bold text-[#8c8c8c]">Avg Hours</th>
+                        <th className="text-center py-1.5 text-[10px] font-bold text-[#8c8c8c]">Annual Hours</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(terminal.vessel_calls ?? []).map((vc) => (
+                        <tr key={vc.id} className="border-b border-gray-100">
+                          <td className="py-1.5 text-[#414141]">
+                            {SEGMENT_LABELS[vc.vessel_segment_key] || vc.vessel_segment_key}
+                          </td>
+                          <td className="py-1.5 text-center text-[#585858]">{fmt(vc.annual_calls)}</td>
+                          <td className="py-1.5 text-center text-[#585858]">{vc.avg_berth_hours}h</td>
+                          <td className="py-1.5 text-center text-[#585858]">{fmt(vc.annual_calls * vc.avg_berth_hours)}h</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
 
@@ -236,77 +263,15 @@ function TerminalDetail({ terminal }: { terminal: PieceTerminalConfig }) {
             </div>
           )}
 
-          {/* Port Services */}
-          {hasPortServices && ps && (
-            <div>
-              <h4 className="text-[10px] font-bold uppercase tracking-widest text-[#8c8c8c] mb-2">
-                Offshore Equipment
-              </h4>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                {(ps.tugs_diesel > 0 || ps.tugs_electric > 0) && (
-                  <>
-                    <div>
-                      <span className="text-[#8c8c8c] text-xs">Tugs (Diesel)</span>
-                      <div className="text-[#414141] font-medium">{ps.tugs_diesel}</div>
-                    </div>
-                    <div>
-                      <span className="text-[#8c8c8c] text-xs">Tugs (Electric)</span>
-                      <div className="text-[#286464] font-medium">{ps.tugs_electric}</div>
-                    </div>
-                  </>
-                )}
-                {(ps.pilot_boats_diesel > 0 || ps.pilot_boats_electric > 0) && (
-                  <>
-                    <div>
-                      <span className="text-[#8c8c8c] text-xs">Pilot Boats (Diesel)</span>
-                      <div className="text-[#414141] font-medium">{ps.pilot_boats_diesel}</div>
-                    </div>
-                    <div>
-                      <span className="text-[#8c8c8c] text-xs">Pilot Boats (Electric)</span>
-                      <div className="text-[#286464] font-medium">{ps.pilot_boats_electric}</div>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
         </div>
       )}
     </div>
   )
 }
 
-export default function BaselineSummary({ port, terminals, onEditBaseline }: Props) {
-  const sizeLabel = PORT_SIZES.find((s) => s.value === port.size_key)?.label ?? port.size_key
-
+export default function BaselineSummary({ terminals, portServicesBaseline }: Props) {
   return (
     <div className="space-y-5">
-      {/* Port Identity + Edit button */}
-      <div className="bg-white rounded-xl border border-gray-100 p-6">
-        <div className="flex items-start justify-between mb-4">
-          <div className="grid grid-cols-3 gap-6 flex-1">
-            <div>
-              <div className="text-[10px] font-bold uppercase tracking-widest text-[#8c8c8c] mb-1">Port Name</div>
-              <div className="text-sm font-semibold text-[#414141]">{port.name || 'Unnamed Port'}</div>
-            </div>
-            <div>
-              <div className="text-[10px] font-bold uppercase tracking-widest text-[#8c8c8c] mb-1">Location</div>
-              <div className="text-sm text-[#414141]">{port.location || '-'}</div>
-            </div>
-            <div>
-              <div className="text-[10px] font-bold uppercase tracking-widest text-[#8c8c8c] mb-1">Size Category</div>
-              <div className="text-sm text-[#414141]">{sizeLabel || '-'}</div>
-            </div>
-          </div>
-          <button
-            onClick={onEditBaseline}
-            className="ml-4 px-4 py-1.5 rounded-lg border border-[#3c5e86] text-[#3c5e86] text-xs font-medium hover:bg-[#3c5e86] hover:text-white transition-colors whitespace-nowrap"
-          >
-            Edit Baseline
-          </button>
-        </div>
-      </div>
-
       {/* Terminal Details */}
       <div>
         <div className="text-[11px] font-bold uppercase tracking-widest text-[#8c8c8c] mb-3">
@@ -318,6 +283,46 @@ export default function BaselineSummary({ port, terminals, onEditBaseline }: Pro
           ))}
         </div>
       </div>
+
+      {/* Offshore Equipment (Port-Wide) */}
+      {portServicesBaseline && (
+        portServicesBaseline.tugs_diesel + portServicesBaseline.tugs_electric +
+        portServicesBaseline.pilot_boats_diesel + portServicesBaseline.pilot_boats_electric > 0
+      ) && (
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-widest text-[#8c8c8c] mb-3">
+            Offshore Equipment
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+              {(portServicesBaseline.tugs_diesel > 0 || portServicesBaseline.tugs_electric > 0) && (
+                <>
+                  <div>
+                    <span className="text-[#8c8c8c] text-xs">Tugs (Diesel)</span>
+                    <div className="text-[#414141] font-medium">{portServicesBaseline.tugs_diesel}</div>
+                  </div>
+                  <div>
+                    <span className="text-[#8c8c8c] text-xs">Tugs (Electric)</span>
+                    <div className="text-[#286464] font-medium">{portServicesBaseline.tugs_electric}</div>
+                  </div>
+                </>
+              )}
+              {(portServicesBaseline.pilot_boats_diesel > 0 || portServicesBaseline.pilot_boats_electric > 0) && (
+                <>
+                  <div>
+                    <span className="text-[#8c8c8c] text-xs">Pilot Boats (Diesel)</span>
+                    <div className="text-[#414141] font-medium">{portServicesBaseline.pilot_boats_diesel}</div>
+                  </div>
+                  <div>
+                    <span className="text-[#8c8c8c] text-xs">Pilot Boats (Electric)</span>
+                    <div className="text-[#286464] font-medium">{portServicesBaseline.pilot_boats_electric}</div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

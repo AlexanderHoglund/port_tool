@@ -13,10 +13,8 @@ import type {
   ScenarioRow,
   ScenarioSummary,
   PiecePortResult,
-  PieceTerminalConfig,
   ScenarioTerminalConfig,
   BerthScenarioConfig,
-  BerthVesselCall,
   ScenarioEquipmentEntry,
 } from './types'
 
@@ -396,15 +394,15 @@ export async function invalidateAllScenarioResults(projectId: string): Promise<v
 
 /**
  * Sync ALL scenario_configs for a project to align with a new baseline.
- * - New terminals: added with throughput from editorTerminals, empty electrification
+ * - New terminals: added with empty electrification
  * - Removed terminals: pruned from scenario_config
  * - Existing terminals: berths synced, equipment num_to_convert capped, orphans removed
+ * Operations data (throughput + vessel calls) lives in baseline, not scenarios.
  * Also invalidates all results (sets result=null) since configs changed.
  */
 export async function syncScenariosWithBaseline(
   projectId: string,
   newBaseline: ProjectBaseline,
-  editorTerminals: PieceTerminalConfig[],
 ): Promise<void> {
   const supabase = createClient()
 
@@ -416,18 +414,6 @@ export async function syncScenariosWithBaseline(
 
   if (fetchErr) throw new Error(`Failed to load scenarios for sync: ${fetchErr.message}`)
   if (!scenarios || scenarios.length === 0) return
-
-  // Build lookup: terminal_id → throughput from editor state
-  const editorThroughputMap = new Map(
-    editorTerminals.map(et => [et.id, {
-      annual_teu: et.annual_teu,
-      annual_passengers: et.annual_passengers,
-      annual_ceu: et.annual_ceu,
-    }])
-  )
-
-  // Build lookup: baseline terminal_id → BaselineTerminalConfig
-  const baselineMap = new Map(newBaseline.terminals.map(t => [t.id, t]))
 
   // For each scenario, compute synced scenario_config
   const updates: { id: string; scenario_config: ScenarioConfig }[] = []
@@ -442,17 +428,11 @@ export async function syncScenariosWithBaseline(
 
     for (const bt of newBaseline.terminals) {
       const existingSt = oldTerminalMap.get(bt.id)
-      const baselineBerthIds = new Set(bt.berths.map(b => b.id))
 
       if (!existingSt) {
-        // NEW TERMINAL: not in scenario yet — copy throughput from editor
-        const throughput = editorThroughputMap.get(bt.id)
+        // NEW TERMINAL: not in scenario yet — empty electrification
         newTerminals.push({
           terminal_id: bt.id,
-          annual_teu: throughput?.annual_teu ?? 0,
-          annual_passengers: throughput?.annual_passengers,
-          annual_ceu: throughput?.annual_ceu,
-          vessel_calls_by_berth: {},
           scenario_equipment: {},
           berth_scenarios: bt.berths.map(b => ({
             berth_id: b.id,
@@ -461,7 +441,7 @@ export async function syncScenariosWithBaseline(
           })),
         })
       } else {
-        // EXISTING TERMINAL: sync berths, equipment, keep throughput
+        // EXISTING TERMINAL: sync berths, equipment
 
         // a) Sync berth_scenarios: keep existing, add new, removed berths auto-dropped
         const existingBerthMap = new Map(
@@ -472,15 +452,7 @@ export async function syncScenariosWithBaseline(
           return existing ?? { berth_id: b.id, ops_enabled: false, dc_enabled: false }
         })
 
-        // b) Sync vessel_calls_by_berth: keep calls for existing berths, drop orphaned
-        const syncedVesselCalls: Record<string, BerthVesselCall[]> = {}
-        for (const [berthId, calls] of Object.entries(existingSt.vessel_calls_by_berth)) {
-          if (baselineBerthIds.has(berthId)) {
-            syncedVesselCalls[berthId] = calls
-          }
-        }
-
-        // c) Sync scenario_equipment: cap num_to_convert, drop removed keys
+        // b) Sync scenario_equipment: cap num_to_convert, drop removed keys
         const syncedEquipment: Record<string, ScenarioEquipmentEntry> = {}
         for (const [eqKey, eqEntry] of Object.entries(existingSt.scenario_equipment)) {
           const baselineEq = bt.baseline_equipment[eqKey]
@@ -496,14 +468,9 @@ export async function syncScenariosWithBaseline(
 
         newTerminals.push({
           terminal_id: existingSt.terminal_id,
-          annual_teu: existingSt.annual_teu,
-          annual_passengers: existingSt.annual_passengers,
-          annual_ceu: existingSt.annual_ceu,
-          vessel_calls_by_berth: syncedVesselCalls,
           scenario_equipment: syncedEquipment,
           berth_scenarios: syncedBerthScenarios,
           charger_overrides: existingSt.charger_overrides,
-          port_services_scenario: existingSt.port_services_scenario,
         })
       }
     }
@@ -511,7 +478,10 @@ export async function syncScenariosWithBaseline(
 
     updates.push({
       id: scenarioRow.id,
-      scenario_config: { terminals: newTerminals },
+      scenario_config: {
+        terminals: newTerminals,
+        port_services_scenario: oldConfig.port_services_scenario,
+      },
     })
   }
 
