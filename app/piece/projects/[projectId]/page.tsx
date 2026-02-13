@@ -70,7 +70,7 @@ export default function ProjectDetailPage() {
     try {
       const scenarioRow = await loadScenarioRow(scenarioId)
       loadProjectScenario(project, scenarioRow)
-      router.push('/piece')
+      router.push('/piece/calculator')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load scenario')
       setLoadingScenarioId(null)
@@ -81,7 +81,7 @@ export default function ProjectDetailPage() {
   const handleEditBaseline = () => {
     if (!project) return
     loadProjectIntoContext(project)
-    router.push('/piece')
+    router.push('/piece/calculator')
   }
 
   // Delete scenario
@@ -129,7 +129,7 @@ export default function ProjectDetailPage() {
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
           <div className="bg-white rounded-2xl border border-gray-200 p-16 text-center">
             <h2 className="text-xl font-semibold text-[#414141] mb-2">Project not found</h2>
-            <a href="/piece/projects" className="text-sm text-[#3c5e86] hover:underline">
+            <a href="/piece" className="text-sm text-[#3c5e86] hover:underline">
               Back to Projects
             </a>
           </div>
@@ -145,7 +145,7 @@ export default function ProjectDetailPage() {
       <div className="max-w-7xl mx-auto px-6 lg:px-8">
         {/* Breadcrumb */}
         <div className="mb-4">
-          <a href="/piece/projects" className="text-xs text-[#3c5e86] hover:underline">
+          <a href="/piece" className="text-xs text-[#3c5e86] hover:underline">
             &larr; All Projects
           </a>
         </div>
@@ -211,13 +211,13 @@ export default function ProjectDetailPage() {
             <div className="text-[#bebebe] text-4xl mb-3">&#9889;</div>
             <h3 className="text-base font-semibold text-[#414141] mb-2">No scenarios yet</h3>
             <p className="text-sm text-[#8c8c8c] max-w-md mx-auto mb-6">
-              Edit the baseline on the Dashboard, configure an electrification scenario, and save it to create your first scenario.
+              Edit the baseline on the Calculator, configure an electrification scenario, and save it to create your first scenario.
             </p>
             <button
               onClick={handleEditBaseline}
               className="px-6 py-2.5 rounded-lg bg-[#414141] text-white text-sm font-semibold hover:bg-[#585858] transition-colors"
             >
-              Open Dashboard
+              Open Calculator
             </button>
           </div>
         ) : (

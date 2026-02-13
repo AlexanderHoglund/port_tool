@@ -44,7 +44,7 @@ export default function PortIdentitySection({ port, onChange, onLoadDefaults }: 
 
         {/* Port Size */}
         <div>
-          <label className={labelBase}>Port Size Category</label>
+          <label className={labelBase}>Port Size Category <span className="text-[#9ca3af] font-normal">(optional)</span></label>
           <select
             value={port.size_key}
             onChange={(e) =>

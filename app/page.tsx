@@ -1,140 +1,147 @@
-import Link from 'next/link'
 import Image from 'next/image'
+import Link from 'next/link'
 
-export default function Home() {
+export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-[#f2f2f2]">
-      {/* Navbar — matches PIECE tool style */}
-      <div className="px-4 pt-4 pb-2">
-        <nav className="max-w-7xl mx-auto bg-[#414141] rounded-2xl px-6 shadow-lg">
-          <div className="flex items-center justify-between h-20">
-            <Link href="/" className="flex items-center gap-3.5 shrink-0">
+    <div className="pb-16">
+      {/* Hero image — MMMCZCS style: padded sides, rounded, constrained height */}
+      <div className="max-w-[1400px] mx-auto px-5 lg:px-8 pt-8">
+        <div className="relative w-full min-h-96 max-h-[560px] aspect-[3.2/1] rounded-2xl overflow-hidden">
+          <Image
+            src="/site/landing.jpg"
+            alt="Aerial view of a container port terminal"
+            fill
+            className="object-cover"
+            priority
+          />
+        </div>
+      </div>
+
+      {/* Title */}
+      <div className="max-w-[1400px] mx-auto px-5 lg:px-8">
+        <h1 className="text-[30px] sm:text-[48px] font-extralight text-[#2c3e50] leading-[1.15] tracking-[-0.02em] mt-12 mb-6 max-w-3xl">
+          Port Electrification Planning Tool
+        </h1>
+      </div>
+
+      {/* Divider + content — two-column like MMMCZCS */}
+      <div className="max-w-[1400px] mx-auto px-5 lg:px-8">
+        <div className="border-t border-gray-300" />
+        <div className="pt-8 flex flex-col lg:flex-row gap-12">
+          {/* Left column — empty on desktop (MMMCZCS pattern) */}
+          <div className="hidden lg:block lg:w-1/3" />
+
+          {/* Right column — body text */}
+          <div className="lg:w-2/3 space-y-5 text-[15px] text-[#4b5563] leading-[1.75]">
+            <p>
+              Ports worldwide face mounting pressure to decarbonise their operations. New regulations
+              such as FuelEU Maritime mandate onshore power supply for berthed vessels, while Science
+              Based Targets and carbon pricing are driving terminal operators to replace diesel
+              equipment with electric alternatives.
+            </p>
+            <p>
+              The <strong className="text-[#2c3e50] font-medium">PiECE Tool</strong> (Port
+              Infrastructure for Electric &amp; Clean Energy) enables port authorities and terminal
+              operators to evaluate the capital investment, operating costs, and
+              CO&#x2082; savings of electrifying port terminal operations — from individual
+              equipment conversion to port-wide grid infrastructure sizing.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Explore section — card grid like MMMCZCS teasers */}
+      <div className="max-w-[1400px] mx-auto px-5 lg:px-8 mt-20">
+        <h2 className="text-[13px] font-medium uppercase tracking-[0.08em] text-[#9ca3af] mb-6">
+          Explore
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <Link href="/piece" className="group">
+            <div className="bg-[#e8f0f8] rounded-2xl aspect-[16/10] flex items-center justify-center mb-3 transition-all group-hover:shadow-md">
               <Image
-                src="/200w.gif"
-                alt="Port Hub Tool"
-                width={200}
-                height={66}
-                className="h-12 w-auto brightness-200 invert"
-                priority
+                src="/Icons/Icons/Energy & Fuels/Electric power.svg"
+                alt=""
+                width={64}
+                height={64}
+                className="opacity-25 group-hover:opacity-40 transition-opacity"
               />
-              <div className="hidden sm:block">
-                <div className="text-white text-[13px] font-semibold leading-tight tracking-tight">
-                  Port Hub Tool
-                </div>
-                <div className="text-[#bebebe] text-[10px] leading-tight">
-                  Port Energy Transition Planning
-                </div>
-              </div>
-            </Link>
-            <Link
-              href="/piece"
-              className="px-5 py-2 rounded-lg text-sm font-medium text-white bg-[#3c5e86] hover:bg-[#2a4566] transition-colors"
-            >
-              Open PIECE Tool
-            </Link>
-          </div>
-        </nav>
-      </div>
+            </div>
+            <h3 className="text-[15px] font-medium text-[#2c3e50] group-hover:text-[#3c5e86] transition-colors">
+              PiECE Tool
+            </h3>
+            <p className="text-[13px] text-[#6b7280] mt-1 leading-relaxed">
+              Evaluate electrification CAPEX, OPEX, and CO&#x2082; savings for your port
+            </p>
+          </Link>
 
-      {/* Hero */}
-      <div className="max-w-7xl mx-auto px-6 lg:px-8 pt-16 pb-12">
-        <div className="max-w-3xl mx-auto text-center">
-          <h1 className="text-4xl sm:text-5xl font-bold text-[#414141] tracking-tight mb-4">
-            Port Infrastructure for<br />
-            Electric &amp; Clean Energy
-          </h1>
-          <p className="text-lg text-[#585858] mb-3">
-            Evaluate the capital investment, operating costs, and CO&#x2082; savings
-            of electrifying port terminal operations.
-          </p>
-          <p className="text-sm text-[#8c8c8c] max-w-xl mx-auto mb-10">
-            The PIECE tool uses throughput-based modelling with equipment-level granularity,
-            berth-by-berth shore power analysis, charger infrastructure sizing, and grid modelling.
-          </p>
-          <Link
-            href="/piece"
-            className="inline-block bg-[#414141] hover:bg-[#585858] text-white font-semibold text-base py-3.5 px-10 rounded-xl transition-colors"
-          >
-            Get Started
+          <Link href="/background" className="group">
+            <div className="bg-[#e6f0ec] rounded-2xl aspect-[16/10] flex items-center justify-center mb-3 transition-all group-hover:shadow-md">
+              <Image
+                src="/Icons/Icons/Sustainability/Decarbonization.svg"
+                alt=""
+                width={64}
+                height={64}
+                className="opacity-25 group-hover:opacity-40 transition-opacity"
+              />
+            </div>
+            <h3 className="text-[15px] font-medium text-[#2c3e50] group-hover:text-[#286464] transition-colors">
+              Background &amp; Regulations
+            </h3>
+            <p className="text-[13px] text-[#6b7280] mt-1 leading-relaxed">
+              FuelEU Maritime, SBTi, health impacts, and the case for electrification
+            </p>
+          </Link>
+
+          <Link href="/general-assumptions" className="group">
+            <div className="bg-[#f5f0e6] rounded-2xl aspect-[16/10] flex items-center justify-center mb-3 transition-all group-hover:shadow-md">
+              <Image
+                src="/Icons/Icons/Efficiency/Bar Chart.svg"
+                alt=""
+                width={64}
+                height={64}
+                className="opacity-25 group-hover:opacity-40 transition-opacity"
+              />
+            </div>
+            <h3 className="text-[15px] font-medium text-[#2c3e50] group-hover:text-[#bc8e54] transition-colors">
+              Useful Data
+            </h3>
+            <p className="text-[13px] text-[#6b7280] mt-1 leading-relaxed">
+              Default equipment specs, economic parameters, and grid data
+            </p>
+          </Link>
+
+          <Link href="/tutorial" className="group">
+            <div className="bg-[#f0ecf5] rounded-2xl aspect-[16/10] flex items-center justify-center mb-3 transition-all group-hover:shadow-md">
+              <Image
+                src="/Icons/Icons/Efficiency/Road sign direction.svg"
+                alt=""
+                width={64}
+                height={64}
+                className="opacity-25 group-hover:opacity-40 transition-opacity"
+              />
+            </div>
+            <h3 className="text-[15px] font-medium text-[#2c3e50] group-hover:text-[#6b5b8a] transition-colors">
+              Tutorial
+            </h3>
+            <p className="text-[13px] text-[#6b7280] mt-1 leading-relaxed">
+              Step-by-step guide to using the PiECE Tool
+            </p>
           </Link>
         </div>
       </div>
 
-      {/* Feature cards */}
-      <div className="max-w-7xl mx-auto px-6 lg:px-8 pb-16">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {[
-            {
-              title: 'Equipment Electrification',
-              desc: 'Model diesel-to-electric conversion of cranes, tractors, reach stackers, and other terminal equipment with per-unit CAPEX and OPEX.',
-              color: '#e8f8fc',
-              border: '#d4eefa',
-              accent: '#3c5e86',
-            },
-            {
-              title: 'Shore Power & OPS',
-              desc: 'Berth-by-berth onshore power supply analysis including transformers, frequency converters, cable runs, and civil works.',
-              color: '#eefae8',
-              border: '#dcf0d6',
-              accent: '#286464',
-            },
-            {
-              title: 'Financial Analysis',
-              desc: 'Total CAPEX breakdown, annual OPEX comparison, diesel savings, grid infrastructure costs, and simple payback period.',
-              color: '#fcf8e4',
-              border: '#fceec8',
-              accent: '#bc8e54',
-            },
-          ].map((card) => (
-            <div
-              key={card.title}
-              className="rounded-2xl p-6 border"
-              style={{ backgroundColor: card.color, borderColor: card.border }}
-            >
-              <div
-                className="w-2 h-2 rounded-full mb-4"
-                style={{ backgroundColor: card.accent }}
-              />
-              <h3 className="text-base font-semibold text-[#414141] mb-2">{card.title}</h3>
-              <p className="text-sm text-[#585858] leading-relaxed">{card.desc}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Supported terminal types */}
-      <div className="max-w-7xl mx-auto px-6 lg:px-8 pb-16">
-        <div className="bg-white rounded-2xl border border-gray-200 px-8 py-8">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div>
-              <h2 className="text-sm font-bold uppercase tracking-widest text-[#8c8c8c] mb-1">
-                Supported Terminal Types
-              </h2>
-              <p className="text-sm text-[#585858]">
-                Multi-terminal port modelling with independent equipment and berth configurations
-              </p>
-            </div>
-            <div className="flex gap-2">
-              {['Container', 'Cruise', 'RoRo'].map((type) => (
-                <span
-                  key={type}
-                  className="px-4 py-2 rounded-lg bg-[#414141] text-white text-xs font-medium"
-                >
-                  {type}
-                </span>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Footer */}
-      <div className="border-t border-[#dcdcdc]">
-        <div className="max-w-7xl mx-auto px-6 lg:px-8 py-6 flex items-center justify-between">
-          <p className="text-xs text-[#8c8c8c]">PIECE Tool &mdash; Port Infrastructure for Electric &amp; Clean Energy</p>
-          <Link href="/piece/about" className="text-xs text-[#8c8c8c] hover:text-[#414141] transition-colors">
-            About
-          </Link>
+      {/* Disclaimer */}
+      <div className="max-w-[1400px] mx-auto px-5 lg:px-8 mt-20">
+        <div className="border-t border-gray-300 pt-8">
+          <h3 className="text-[13px] font-medium text-[#2c3e50] mb-3">Disclaimer</h3>
+          <p className="text-[12px] text-[#9ca3af] leading-[1.8] max-w-3xl">
+            This tool has been prepared for informational and planning purposes only. The content
+            is based on publicly available data, industry benchmarks, and standard engineering
+            assumptions. While every effort has been made to ensure accuracy, the authors do not
+            guarantee the completeness or suitability of the information for any specific purpose.
+            Users are encouraged to consult with qualified engineers and advisors before making
+            investment decisions based on the results presented herein.
+          </p>
         </div>
       </div>
     </div>

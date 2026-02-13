@@ -196,10 +196,10 @@ export const EQUIPMENT_GROUPS = [
 
 export const PORT_SIZES = [
   { value: '', label: 'Select size...' },
-  { value: 'small_feeder', label: 'Small Feeder (< 500K TEU)' },
-  { value: 'regional', label: 'Regional (500K \u2013 2M TEU)' },
-  { value: 'hub', label: 'Hub (2M \u2013 10M TEU)' },
-  { value: 'mega_hub', label: 'Mega Hub (> 10M TEU)' },
+  { value: 'small_feeder', label: 'Small / Feeder' },
+  { value: 'regional', label: 'Regional' },
+  { value: 'hub', label: 'Hub' },
+  { value: 'mega_hub', label: 'Mega Hub' },
 ] as const
 
 // ═══════════════════════════════════════════════════════════
@@ -285,6 +285,64 @@ export type TypicalTerminalConfig = {
 export type TypicalPortConfig = {
   terminals: TypicalTerminalConfig[]
 }
+
+// ═══════════════════════════════════════════════════════════
+// Assumption Tables (used by editable + read-only assumptions pages)
+// ═══════════════════════════════════════════════════════════
+
+export type AssumptionTableKey = 'economic_assumptions' | 'piece_equipment' | 'piece_evse' | 'piece_fleet_ops' | 'piece_grid'
+
+export const ASSUMPTION_TABLES: { key: AssumptionTableKey; label: string; description: string; rowKeyCol: string; icon: string }[] = [
+  {
+    key: 'economic_assumptions',
+    label: 'Economic Parameters',
+    description: 'Electricity price, diesel price, emission factors, discount rates, and other financial assumptions',
+    rowKeyCol: 'assumption_key',
+    icon: '/icons/Icons/Business/Price tag dollar.svg',
+  },
+  {
+    key: 'piece_equipment',
+    label: 'Equipment Specifications',
+    description: 'CAPEX, OPEX, peak power, energy intensity, and throughput ratios for terminal equipment',
+    rowKeyCol: 'equipment_key',
+    icon: '/icons/Icons/Efficiency/Gears.svg',
+  },
+  {
+    key: 'piece_evse',
+    label: 'EVSE Chargers',
+    description: 'Charger types, power ratings, costs, and units per charger for battery-powered equipment',
+    rowKeyCol: 'evse_key',
+    icon: '/icons/Icons/Energy & Fuels/Plug.svg',
+  },
+  {
+    key: 'piece_fleet_ops',
+    label: 'Vessel & OPS',
+    description: 'Shore power demand, OPS infrastructure costs, and berth parameters per vessel segment',
+    rowKeyCol: 'vessel_segment_key',
+    icon: '/icons/Icons/Shipping/Cargo Ship.svg',
+  },
+  {
+    key: 'piece_grid',
+    label: 'Grid Infrastructure',
+    description: 'Substation costs, cable costs, voltage levels, and simultaneity factors',
+    rowKeyCol: 'component_key',
+    icon: '/icons/Icons/Energy & Fuels/Electric power.svg',
+  },
+]
+
+// Columns to hide in the UI
+export const HIDDEN_COLUMNS = ['id', 'created_at']
+
+// Columns that should not be editable (identifiers, display names, text descriptors)
+export const NON_EDITABLE_COLUMNS = [
+  'assumption_key', 'equipment_key', 'evse_key', 'vessel_segment_key', 'component_key',
+  'display_name', 'description', 'equipment_category', 'equipment_type', 'terminal_type_key',
+  'unit_label', 'unit', 'source', 'cable_type', 'cable_size', 'ops_voltage',
+]
+
+// ═══════════════════════════════════════════════════════════
+// Typical Port Configurations (realistic defaults per size)
+// ═══════════════════════════════════════════════════════════
 
 export const TYPICAL_PORT_CONFIGS: Record<string, TypicalPortConfig> = {
   small_feeder: {
