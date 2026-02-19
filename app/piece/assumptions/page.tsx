@@ -342,14 +342,26 @@ export default function AssumptionsPage() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-gray-50 border-b border-gray-200">
-                          {columns.map((col) => (
-                            <th
-                              key={col}
-                              className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[#8c8c8c]"
-                            >
-                              {formatHeader(col)}
-                            </th>
-                          ))}
+                          {columns.map((col) => {
+                            const colEditable = isEditable(col)
+                            return (
+                              <th
+                                key={col}
+                                className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider ${
+                                  colEditable ? 'text-[#3c5e86]' : 'text-[#8c8c8c]'
+                                }`}
+                              >
+                                <span className="flex items-center gap-1.5">
+                                  {formatHeader(col)}
+                                  {colEditable && (
+                                    <svg className="w-3 h-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                    </svg>
+                                  )}
+                                </span>
+                              </th>
+                            )
+                          })}
                           <th className="px-3 py-3 w-10" />
                         </tr>
                       </thead>
@@ -385,9 +397,13 @@ export default function AssumptionsPage() {
                                 return (
                                   <td
                                     key={col}
-                                    className={`px-4 py-3 whitespace-nowrap ${
-                                      editable ? 'cursor-pointer' : ''
-                                    } ${override ? 'bg-blue-50/60' : ''}`}
+                                    className={`px-4 py-3 whitespace-nowrap transition-colors ${
+                                      override
+                                        ? 'bg-blue-50/60'
+                                        : editable
+                                        ? 'bg-[#f8fafc] hover:bg-blue-50/40 cursor-pointer'
+                                        : ''
+                                    }`}
                                     onClick={editable ? () => startEditing(rowKey, col, displayValue) : undefined}
                                     title={
                                       override
@@ -400,6 +416,8 @@ export default function AssumptionsPage() {
                                     <span className={`${
                                       override
                                         ? 'text-blue-700 font-medium'
+                                        : editable
+                                        ? 'text-[#3c5e86]'
                                         : 'text-[#414141]'
                                     }`}>
                                       {formatCell(displayValue)}
@@ -437,12 +455,14 @@ export default function AssumptionsPage() {
               </div>
 
               {/* Info Banner */}
-              <div className="mt-4 bg-blue-50 border border-blue-200 rounded-xl px-5 py-4">
+              <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 px-5 py-3 flex items-start gap-3">
+                <svg className="w-4 h-4 text-[#3c5e86] mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
                 <p className="text-sm text-[#3c5e86]">
-                  <span className="font-semibold">Click any numeric cell to customize it.</span>{' '}
-                  Custom values are shown in blue with the original default in parentheses.
-                  Use &quot;Reset&quot; to revert individual values or &quot;Reset All&quot; for the entire table.
-                  Default values in the database are never modified.
+                  <span className="font-semibold">Columns with the pencil icon are editable</span> — click any
+                  highlighted cell to customize its value. Custom values appear in blue with the original in
+                  parentheses. Use &quot;Reset&quot; to revert changes. Default database values are never modified.
                 </p>
               </div>
             </div>

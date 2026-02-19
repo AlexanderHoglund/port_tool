@@ -285,14 +285,14 @@ export default function PieceResultsSection({ result }: Props) {
           label="CO₂ Reduction"
           value={`${formatNumber(totals.co2_tons_saved)} t`}
           subtext={`${totals.co2_reduction_percent.toFixed(1)}% reduction`}
-          icon="/icons/Icons/Sustainability/Decarbonization.svg"
+          icon="/Icons/Icons/Sustainability/Decarbonization.svg"
           highlight
         />
         <SummaryCard
           label="Diesel Saved"
           value={`${formatNumber(totals.diesel_liters_saved)} L`}
           subtext="annual litres avoided"
-          icon="/icons/Icons/Energy & Fuels/Fuel.svg"
+          icon="/Icons/Icons/Energy & Fuels/Fuel.svg"
         />
         <SummaryCard
           label="Annual OPEX Change"
@@ -306,7 +306,7 @@ export default function PieceResultsSection({ result }: Props) {
               ? 'annual savings'
               : 'annual cost increase'
           }
-          icon="/icons/Icons/Business/Investment.svg"
+          icon="/Icons/Icons/Business/Investment.svg"
           danger={totals.annual_opex_savings_usd < 0}
           success={totals.annual_opex_savings_usd >= 0}
         />
@@ -314,7 +314,7 @@ export default function PieceResultsSection({ result }: Props) {
           label="Simple Payback"
           value={totals.simple_payback_years ? `${totals.simple_payback_years.toFixed(1)} years` : 'N/A'}
           subtext="investment recovery"
-          icon="/icons/Icons/Business/Calendar.svg"
+          icon="/Icons/Icons/Business/Calendar.svg"
         />
       </div>
 

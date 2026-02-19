@@ -473,7 +473,7 @@ export default function CompareSection({ scenarioList, activeProjectId, onCompar
       {/* ── CAPEX Breakdown: donuts + grouped bars ── */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <h3 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-[#8c8c8c] mb-5">
-          <Image src="/icons/Icons/Efficiency/Pie chart.svg" alt="" width={16} height={16} className="opacity-40" />
+          <Image src="/Icons/Icons/Efficiency/Pie chart.svg" alt="" width={16} height={16} className="opacity-40" />
           CAPEX Breakdown
         </h3>
 
@@ -588,7 +588,7 @@ export default function CompareSection({ scenarioList, activeProjectId, onCompar
       {/* ── Environmental + Savings bars ── */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <h3 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-[#8c8c8c] mb-5">
-          <Image src="/icons/Icons/Efficiency/Bar Chart.svg" alt="" width={16} height={16} className="opacity-40" />
+          <Image src="/Icons/Icons/Efficiency/Bar Chart.svg" alt="" width={16} height={16} className="opacity-40" />
           Key Differences
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -627,7 +627,7 @@ export default function CompareSection({ scenarioList, activeProjectId, onCompar
       {/* ── Energy Profile side-by-side ── */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <h3 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-[#8c8c8c] mb-5">
-          <Image src="/icons/Icons/Energy & Fuels/Energy sources.svg" alt="" width={16} height={16} className="opacity-40" />
+          <Image src="/Icons/Icons/Energy & Fuels/Energy sources.svg" alt="" width={16} height={16} className="opacity-40" />
           Energy Profile
         </h3>
         <div className={`grid gap-4 ${loadedScenarios.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
