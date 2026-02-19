@@ -62,7 +62,7 @@ export default function CalculatorPage() {
 
   // ── Tab state ──
   const [activeTab, setActiveTab] = useState<DashboardTab>(() =>
-    activeScenarioId ? 'scenario' : 'baseline'
+    result ? 'results' : activeScenarioId ? 'scenario' : 'baseline'
   )
   const [scenarioList, setScenarioList] = useState<ScenarioSummary[]>([])
   const [isBaselineEditing, setIsBaselineEditing] = useState(false)
@@ -132,7 +132,10 @@ export default function CalculatorPage() {
       skipTabSwitchRef.current = false
       return
     }
-    if (activeScenarioId) {
+    if (result) {
+      setActiveTab('results')
+      setIsBaselineEditing(false)
+    } else if (activeScenarioId) {
       setActiveTab('scenario')
       setIsBaselineEditing(false)
     } else {
@@ -169,8 +172,6 @@ export default function CalculatorPage() {
       name: string
       type: TerminalType
       teu: number
-      ceu?: number
-      passengers?: number
       berths: { segment: string; calls: number; hours: number }[]
       equipment: Record<string, number>
       cableLength: number
@@ -208,7 +209,7 @@ export default function CalculatorPage() {
             cableLength: 800,
           },
           {
-            name: 'RoRo Terminal', type: 'roro', teu: 0, ceu: 120000,
+            name: 'RoRo Terminal', type: 'roro', teu: 0,
             berths: [
               { segment: 'roro_0_4k', calls: 200, hours: 12 },
               { segment: 'roro_4_7k', calls: 80, hours: 16 },
@@ -244,7 +245,7 @@ export default function CalculatorPage() {
             cableLength: 1000,
           },
           {
-            name: 'RoRo Terminal', type: 'roro', teu: 0, ceu: 250000,
+            name: 'RoRo Terminal', type: 'roro', teu: 0,
             berths: [
               { segment: 'roro_0_4k', calls: 300, hours: 12 },
               { segment: 'roro_4_7k', calls: 150, hours: 16 },
@@ -283,7 +284,7 @@ export default function CalculatorPage() {
             cableLength: 1400,
           },
           {
-            name: 'RoRo Terminal', type: 'roro', teu: 0, ceu: 400000,
+            name: 'RoRo Terminal', type: 'roro', teu: 0,
             berths: [
               { segment: 'roro_4_7k', calls: 250, hours: 14 },
               { segment: 'roro_7k_plus', calls: 180, hours: 18 },
@@ -293,7 +294,7 @@ export default function CalculatorPage() {
             cableLength: 600,
           },
           {
-            name: 'Cruise Terminal', type: 'cruise', teu: 0, passengers: 800000,
+            name: 'Cruise Terminal', type: 'cruise', teu: 0,
             berths: [
               { segment: 'cruise_25_100k', calls: 120, hours: 10 },
               { segment: 'cruise_100_175k', calls: 80, hours: 12 },
@@ -360,8 +361,6 @@ export default function CalculatorPage() {
         name: termDef.name,
         terminal_type: termDef.type,
         annual_teu: termDef.teu,
-        annual_ceu: termDef.ceu,
-        annual_passengers: termDef.passengers,
         vessel_calls,
         berths,
         berth_scenarios,
@@ -644,7 +643,7 @@ export default function CalculatorPage() {
     )
 
   const isBaselineComplete = terminals.some(t =>
-    (t.annual_teu > 0 || (t.annual_passengers ?? 0) > 0 || (t.annual_ceu ?? 0) > 0) &&
+    (t.terminal_type !== 'container' || t.annual_teu > 0) &&
     (hasBaselineEquipment(t.baseline_equipment) || (t.vessel_calls ?? []).length > 0)
   )
   const isScenarioComplete = terminals.some(t =>
@@ -700,10 +699,10 @@ export default function CalculatorPage() {
             </div>
             <div className="flex items-center gap-3">
               <a
-                href={`/piece/projects/${activeProjectId}`}
+                href="/piece/projects"
                 className="text-xs text-[#3c5e86] hover:text-[#2a4566] font-medium"
               >
-                View Project
+                All Projects
               </a>
             </div>
           </div>
@@ -750,15 +749,15 @@ export default function CalculatorPage() {
                     1
                   </div>
                   <div>
-                    <h2 className="text-xl font-semibold text-[#414141]">Port Information</h2>
-                    <p className="text-sm text-[#8c8c8c]">Port identity and size classification</p>
+                    <h2 className="text-xl font-semibold text-[#414141]">Port Definition</h2>
+                    <p className="text-sm text-[#8c8c8c]">Name and location of your port</p>
                   </div>
                 </div>
 
                 {scenarioList.length > 0 && !isBaselineEditing ? (
                   /* Read-only port info summary */
                   <div className="bg-white rounded-xl border border-gray-100 p-6">
-                    <div className="grid grid-cols-3 gap-6">
+                    <div className="grid grid-cols-2 gap-6">
                       <div>
                         <div className="text-[10px] font-bold uppercase tracking-widest text-[#8c8c8c] mb-1">Port Name</div>
                         <div className="text-sm font-semibold text-[#414141]">{port.name || 'Unnamed Port'}</div>
@@ -766,12 +765,6 @@ export default function CalculatorPage() {
                       <div>
                         <div className="text-[10px] font-bold uppercase tracking-widest text-[#8c8c8c] mb-1">Location</div>
                         <div className="text-sm text-[#414141]">{port.location || '-'}</div>
-                      </div>
-                      <div>
-                        <div className="text-[10px] font-bold uppercase tracking-widest text-[#8c8c8c] mb-1">Size Category</div>
-                        <div className="text-sm text-[#414141]">
-                          {(PORT_SIZES.find((s) => s.value === port.size_key)?.label ?? port.size_key) || '-'}
-                        </div>
                       </div>
                     </div>
                   </div>
@@ -796,7 +789,7 @@ export default function CalculatorPage() {
                       <p className="text-sm text-[#8c8c8c]">
                         {scenarioList.length > 0
                           ? 'Shared across all scenarios'
-                          : 'Configure your current port setup - terminals, throughput, and existing equipment'}
+                          : 'Configure your current port setup'}
                       </p>
                     </div>
                   </div>

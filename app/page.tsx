@@ -52,9 +52,16 @@ export default function LandingPage() {
 
       {/* Explore section — card grid like MMMCZCS teasers */}
       <div className="max-w-[1400px] mx-auto px-5 lg:px-8 mt-20">
-        <h2 className="text-[13px] font-medium uppercase tracking-[0.08em] text-[#9ca3af] mb-6">
-          Explore
+        <h2 className="text-[13px] font-medium uppercase tracking-[0.08em] text-[#9ca3af] mb-3">
+          Features Available
         </h2>
+        <p className="text-[15px] text-[#4b5563] leading-[1.75] mb-8 max-w-3xl">
+          The PiECE Tool currently offers port-level electrification scenario modelling,
+          including CAPEX and OPEX estimation for shore power, electric cranes, and yard
+          equipment — alongside a regulatory background section covering FuelEU Maritime and
+          Science Based Targets, reference data for equipment specs and grid parameters,
+          and a step-by-step tutorial to guide you through the analysis.
+        </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           <Link href="/piece" className="group">
             <div className="bg-[#e8f0f8] rounded-2xl aspect-[16/10] flex items-center justify-center mb-3 transition-all group-hover:shadow-md">

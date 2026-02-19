@@ -13,6 +13,7 @@ const NAV_LINKS = [
 ]
 
 const DIAMOND_BUTTONS = [
+  { href: '/', label: 'Homepage', color: '#6b7280' },
   { href: '/background', label: 'Background', color: '#3c5e86' },
   { href: '/general-assumptions', label: 'Useful Data', color: '#bc8e54' },
   { href: '/piece', label: 'PiECE Tool', color: '#286464' },
@@ -30,7 +31,8 @@ export default function SiteNavWrapper() {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
-  const isActive = (href: string) => pathname.startsWith(href)
+  const isActive = (href: string) =>
+    href === '/' ? pathname === '/' : pathname.startsWith(href)
 
   return (
     <header className="sticky top-0 z-50 px-4 pt-4">
@@ -47,7 +49,7 @@ export default function SiteNavWrapper() {
           <Link href="/" className="flex items-center gap-3 shrink-0">
             <Image
               src="/200w.gif"
-              alt="Port Hub Tool"
+              alt="PiECE Tool"
               width={200}
               height={66}
               className={`h-9 w-auto transition-all duration-300 ${
@@ -61,14 +63,14 @@ export default function SiteNavWrapper() {
                   scrolled ? 'text-white' : 'text-[#2c3e50]'
                 }`}
               >
-                Port Hub Tool
+                PiECE Tool
               </div>
               <div
                 className={`text-[10px] mt-0.5 transition-colors duration-300 ${
                   scrolled ? 'text-white/50' : 'text-[#9ca3af]'
                 }`}
               >
-                Port Energy Transition Planning
+                Port Infrastructure for Electric &amp; Clean Energy
               </div>
             </div>
           </Link>

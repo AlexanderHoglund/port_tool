@@ -70,7 +70,9 @@ export default function AssumptionsPage() {
     : []
 
   const formatHeader = (col: string) =>
-    col.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+    col.replace(/_/g, ' ')
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+      .replace(/\bLiters?\b/g, (m) => m.toLowerCase())
 
   const formatCell = (value: unknown): string => {
     if (value === null || value === undefined) return '-'

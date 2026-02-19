@@ -6,12 +6,8 @@ import type { BerthVesselCall, TerminalType } from '@/lib/types'
 type Props = {
   terminalType: TerminalType
   annualTeu: number
-  annualPassengers?: number
-  annualCeu?: number
   vesselCalls: BerthVesselCall[]
   onTeuChange: (value: number) => void
-  onPassengersChange?: (value: number | undefined) => void
-  onCeuChange?: (value: number | undefined) => void
   onVesselCallsChange: (calls: BerthVesselCall[]) => void
 }
 
@@ -51,45 +47,19 @@ const DEFAULT_BERTH_HOURS: Record<string, number> = {
   roro_7k_plus: 16,
 }
 
-// Throughput labels per terminal type
-const THROUGHPUT_CONFIG: Record<TerminalType, { label: string; unit: string; field: 'teu' | 'passengers' | 'ceu' }> = {
-  container: { label: 'Annual TEU', unit: 'TEU', field: 'teu' },
-  cruise: { label: 'Annual Passengers', unit: 'passengers', field: 'passengers' },
-  roro: { label: 'Annual CEU', unit: 'CEU', field: 'ceu' },
-}
-
 export default function OperationsPanel({
   terminalType,
   annualTeu,
-  annualPassengers,
-  annualCeu,
   vesselCalls,
   onTeuChange,
-  onPassengersChange,
-  onCeuChange,
   onVesselCallsChange,
 }: Props) {
   const segments = VESSEL_SEGMENTS[terminalType] || VESSEL_SEGMENTS.container
-  const throughput = THROUGHPUT_CONFIG[terminalType]
+  const isContainer = terminalType === 'container'
 
   // Pending total: stores user-entered total when no vessel calls exist yet.
   // Once vessel types are added, the total is derived from their sum.
   const [pendingTotal, setPendingTotal] = useState(0)
-
-  const throughputValue =
-    throughput.field === 'passengers' ? (annualPassengers ?? 0) :
-    throughput.field === 'ceu' ? (annualCeu ?? 0) :
-    annualTeu
-
-  function handleThroughputChange(value: number) {
-    if (throughput.field === 'passengers') {
-      onPassengersChange?.(value)
-    } else if (throughput.field === 'ceu') {
-      onCeuChange?.(value)
-    } else {
-      onTeuChange(value)
-    }
-  }
 
   /** Distribute a total evenly across N vessel calls, preserving other fields */
   function distributeEvenly(calls: BerthVesselCall[], newTotal: number): BerthVesselCall[] {
@@ -145,22 +115,24 @@ export default function OperationsPanel({
 
   return (
     <div className="space-y-4">
-      {/* Throughput input */}
+      {/* Throughput & vessel calls summary */}
       <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          <label className="text-xs font-semibold text-[#555] whitespace-nowrap">
-            {throughput.label}
-          </label>
-          <input
-            type="number"
-            min={0}
-            value={throughputValue || ''}
-            onChange={(e) => handleThroughputChange(parseInt(e.target.value) || 0)}
-            placeholder="0"
-            className="w-32 px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-[#414141] bg-white focus:border-[#3c5e86] focus:ring-1 focus:ring-[#3c5e86] focus:outline-none text-right"
-          />
-          <span className="text-[10px] text-[#999] uppercase">{throughput.unit}/yr</span>
-        </div>
+        {isContainer && (
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-semibold text-[#555] whitespace-nowrap">
+              Annual TEU
+            </label>
+            <input
+              type="number"
+              min={0}
+              value={annualTeu || ''}
+              onChange={(e) => onTeuChange(parseInt(e.target.value) || 0)}
+              placeholder="0"
+              className="w-32 px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-[#414141] bg-white focus:border-[#3c5e86] focus:ring-1 focus:ring-[#3c5e86] focus:outline-none text-right"
+            />
+            <span className="text-[10px] text-[#999] uppercase">TEU/yr</span>
+          </div>
+        )}
         <div className="flex items-center gap-2">
           <label className="text-xs font-semibold text-[#555] whitespace-nowrap">
             Total Calls/Year

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import type { PortConfig, ProjectRow } from '@/lib/types'
-import { PORT_SIZES, inputBase, labelBase } from '@/lib/constants'
+import { inputBase, labelBase } from '@/lib/constants'
 import { createProject, loadProject as loadProjectRow } from '@/lib/piece-projects'
 
 type Props = {
@@ -15,7 +15,6 @@ export default function NewProjectDialog({ open, onClose, onCreated }: Props) {
   const [projectName, setProjectName] = useState('')
   const [portName, setPortName] = useState('')
   const [portLocation, setPortLocation] = useState('')
-  const [portSizeKey, setPortSizeKey] = useState<PortConfig['size_key']>('')
   const [description, setDescription] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -31,7 +30,7 @@ export default function NewProjectDialog({ open, onClose, onCreated }: Props) {
       const port: PortConfig = {
         name: portName.trim(),
         location: portLocation.trim(),
-        size_key: portSizeKey,
+        size_key: '',
       }
 
       const baseline = {
@@ -107,19 +106,6 @@ export default function NewProjectDialog({ open, onClose, onCreated }: Props) {
                 placeholder="e.g. Netherlands"
               />
             </div>
-          </div>
-
-          <div>
-            <label className={labelBase}>Port Size</label>
-            <select
-              value={portSizeKey}
-              onChange={(e) => setPortSizeKey(e.target.value as PortConfig['size_key'])}
-              className={inputBase}
-            >
-              {PORT_SIZES.map((s) => (
-                <option key={s.value} value={s.value}>{s.label}</option>
-              ))}
-            </select>
           </div>
 
           <div>

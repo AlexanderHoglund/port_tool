@@ -55,13 +55,9 @@ const EQUIPMENT_PEAK_KW: Record<string, number> = {
 
 // Default buildings/lighting config
 const DEFAULT_BUILDINGS_LIGHTING: BuildingsLightingConfig = {
-  warehouse_sqm: 0,
-  office_sqm: 0,
-  workshop_sqm: 0,
-  high_mast_lights: 0,
-  area_lights: 0,
-  roadway_lights: 0,
-  annual_operating_hours: 8760,
+  buildings_annual_kwh: 0,
+  lighting_annual_kwh: 0,
+  other_annual_kwh: 0,
 }
 
 export default function PieceTerminalCard({
@@ -294,22 +290,24 @@ export default function PieceTerminalCard({
                 />
               </CollapsibleSection>
 
-              {/* Onshore Equipment */}
-              <CollapsibleSection
-                title="Onshore Equipment"
-                badge={
-                  (baselineDieselCount > 0 || baselineElectricCount > 0)
-                    ? `${baselineDieselCount} diesel + ${baselineElectricCount} electric`
-                    : undefined
-                }
-                defaultOpen={false}
-              >
-                <BaselineEquipmentTable
-                  terminalType={terminal.terminal_type}
-                  equipment={terminal.baseline_equipment}
-                  onChange={(eq) => onChange({ ...terminal, baseline_equipment: eq })}
-                />
-              </CollapsibleSection>
+              {/* Onshore Equipment — container terminals only */}
+              {terminal.terminal_type === 'container' && (
+                <CollapsibleSection
+                  title="Onshore Equipment"
+                  badge={
+                    (baselineDieselCount > 0 || baselineElectricCount > 0)
+                      ? `${baselineDieselCount} diesel + ${baselineElectricCount} electric`
+                      : undefined
+                  }
+                  defaultOpen={false}
+                >
+                  <BaselineEquipmentTable
+                    terminalType={terminal.terminal_type}
+                    equipment={terminal.baseline_equipment}
+                    onChange={(eq) => onChange({ ...terminal, baseline_equipment: eq })}
+                  />
+                </CollapsibleSection>
+              )}
 
               {/* Buildings & Lighting */}
               <CollapsibleSection
@@ -333,12 +331,8 @@ export default function PieceTerminalCard({
                 <OperationsPanel
                   terminalType={terminal.terminal_type}
                   annualTeu={terminal.annual_teu}
-                  annualPassengers={terminal.annual_passengers}
-                  annualCeu={terminal.annual_ceu}
                   vesselCalls={terminal.vessel_calls ?? []}
                   onTeuChange={(v) => onChange({ ...terminal, annual_teu: v })}
-                  onPassengersChange={(v) => onChange({ ...terminal, annual_passengers: v })}
-                  onCeuChange={(v) => onChange({ ...terminal, annual_ceu: v })}
                   onVesselCallsChange={(calls) => onChange({ ...terminal, vessel_calls: calls })}
                 />
               </CollapsibleSection>
@@ -364,32 +358,36 @@ export default function PieceTerminalCard({
                 />
               </CollapsibleSection>
 
-              {/* Onshore Equipment Changes */}
-              <CollapsibleSection
-                title="Onshore Equipment Changes"
-                defaultOpen={false}
-              >
-                <ScenarioEquipmentTable
-                  terminalType={terminal.terminal_type}
-                  baseline={terminal.baseline_equipment}
-                  scenario={terminal.scenario_equipment}
-                  onChange={(eq) => onChange({ ...terminal, scenario_equipment: eq })}
-                />
-              </CollapsibleSection>
+              {/* Onshore Equipment Changes — container terminals only */}
+              {terminal.terminal_type === 'container' && (
+                <CollapsibleSection
+                  title="Onshore Equipment Changes"
+                  defaultOpen={false}
+                >
+                  <ScenarioEquipmentTable
+                    terminalType={terminal.terminal_type}
+                    baseline={terminal.baseline_equipment}
+                    scenario={terminal.scenario_equipment}
+                    onChange={(eq) => onChange({ ...terminal, scenario_equipment: eq })}
+                  />
+                </CollapsibleSection>
+              )}
 
-              {/* Chargers */}
-              <CollapsibleSection
-                title="Chargers (EVSE)"
-                defaultOpen={false}
-              >
-                <ChargerPanel
-                  scenarioEquipment={scenarioElectricEquipment}
-                  chargerOverrides={terminal.charger_overrides}
-                  onChange={(overrides) =>
-                    onChange({ ...terminal, charger_overrides: overrides })
-                  }
-                />
-              </CollapsibleSection>
+              {/* Chargers — container terminals only */}
+              {terminal.terminal_type === 'container' && (
+                <CollapsibleSection
+                  title="Chargers (EVSE)"
+                  defaultOpen={false}
+                >
+                  <ChargerPanel
+                    scenarioEquipment={scenarioElectricEquipment}
+                    chargerOverrides={terminal.charger_overrides}
+                    onChange={(overrides) =>
+                      onChange({ ...terminal, charger_overrides: overrides })
+                    }
+                  />
+                </CollapsibleSection>
+              )}
 
               {/* Grid Infrastructure */}
               <CollapsibleSection

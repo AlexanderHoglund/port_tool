@@ -294,13 +294,13 @@ function validateBuildingsLighting(
   const c = config as Record<string, unknown>
 
   const fields = [
-    'warehouse_sqm', 'office_sqm', 'workshop_sqm',
-    'high_mast_lights', 'area_lights', 'roadway_lights',
-    'annual_operating_hours'
+    'buildings_annual_kwh', 'lighting_annual_kwh', 'other_annual_kwh',
   ] as const
 
   for (const field of fields) {
     if (typeof c[field] !== 'number' || c[field] < 0) {
+      // Backward compat: accept old-format configs silently (they just won't have new fields)
+      if (c[field] === undefined) continue
       return { ok: false, error: `${prefix}.${field} must be a non-negative number.` }
     }
   }
@@ -308,13 +308,9 @@ function validateBuildingsLighting(
   return {
     ok: true,
     data: {
-      warehouse_sqm: c.warehouse_sqm as number,
-      office_sqm: c.office_sqm as number,
-      workshop_sqm: c.workshop_sqm as number,
-      high_mast_lights: c.high_mast_lights as number,
-      area_lights: c.area_lights as number,
-      roadway_lights: c.roadway_lights as number,
-      annual_operating_hours: c.annual_operating_hours as number,
+      buildings_annual_kwh: typeof c.buildings_annual_kwh === 'number' ? c.buildings_annual_kwh : 0,
+      lighting_annual_kwh: typeof c.lighting_annual_kwh === 'number' ? c.lighting_annual_kwh : 0,
+      other_annual_kwh: typeof c.other_annual_kwh === 'number' ? c.other_annual_kwh : 0,
     },
   }
 }

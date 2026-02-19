@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { listProjects, deleteProject } from '@/lib/piece-projects'
+import { listProjects, deleteProject, loadProject as loadProjectRow, listScenarios, loadScenario as loadScenarioRow } from '@/lib/piece-projects'
 import type { ProjectSummary, ProjectRow } from '@/lib/types'
 import NewProjectDialog from '@/components/shipping/NewProjectDialog'
 import { usePieceContext } from '@/app/piece/context/PieceContext'
@@ -33,11 +33,44 @@ export default function ProjectsPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [showNewDialog, setShowNewDialog] = useState(false)
+  const [openingId, setOpeningId] = useState<string | null>(null)
 
   const handleProjectCreated = useCallback((projectRow: ProjectRow) => {
     ctx.loadProject(projectRow)
-    router.push('/piece')
+    router.push('/piece/calculator')
   }, [ctx, router])
+
+  // Open project directly: load best scenario (with results preferred), or just baseline
+  const handleOpenProject = async (projectId: string) => {
+    setOpeningId(projectId)
+    setError(null)
+    try {
+      const [project, scenarios] = await Promise.all([
+        loadProjectRow(projectId),
+        listScenarios(projectId),
+      ])
+
+      const withResults = scenarios
+        .filter((s) => s.has_result)
+        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+      const withoutResults = scenarios
+        .filter((s) => !s.has_result)
+        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+      const bestScenario = withResults[0] ?? withoutResults[0] ?? null
+
+      if (bestScenario) {
+        const scenarioRow = await loadScenarioRow(bestScenario.id)
+        ctx.loadProjectScenario(project, scenarioRow)
+      } else {
+        ctx.loadProject(project)
+      }
+
+      router.push('/piece/calculator')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to open project')
+      setOpeningId(null)
+    }
+  }
 
   const fetchProjects = useCallback(async () => {
     setLoading(true)
@@ -171,10 +204,11 @@ export default function ProjectsPage() {
                   {/* Actions */}
                   <div className="flex items-center gap-2 shrink-0">
                     <button
-                      onClick={() => router.push(`/piece/projects/${project.id}`)}
-                      className="px-5 py-2 rounded-lg bg-[#414141] text-white text-sm font-medium hover:bg-[#585858] transition-colors"
+                      onClick={() => handleOpenProject(project.id)}
+                      disabled={openingId === project.id}
+                      className="px-5 py-2 rounded-lg bg-[#414141] text-white text-sm font-medium hover:bg-[#585858] disabled:opacity-50 transition-colors"
                     >
-                      Open
+                      {openingId === project.id ? 'Loading...' : 'Open'}
                     </button>
 
                     {confirmDeleteId === project.id ? (

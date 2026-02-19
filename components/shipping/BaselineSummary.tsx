@@ -47,8 +47,7 @@ function TerminalDetail({ terminal }: { terminal: PieceTerminalConfig }) {
   const typeLabel = terminal.terminal_type === 'container' ? 'Container'
     : terminal.terminal_type === 'cruise' ? 'Cruise' : 'RoRo'
 
-  const throughputLabel = terminal.terminal_type === 'container' ? 'TEU'
-    : terminal.terminal_type === 'cruise' ? 'passengers' : 'CEU'
+  const isContainer = terminal.terminal_type === 'container'
 
   const totalDiesel = Object.values(terminal.baseline_equipment).reduce(
     (s, e) => s + (e?.existing_diesel || 0), 0
@@ -58,7 +57,7 @@ function TerminalDetail({ terminal }: { terminal: PieceTerminalConfig }) {
   )
 
   const bl = terminal.buildings_lighting
-  const hasBuildings = bl && (bl.warehouse_sqm + bl.office_sqm + bl.workshop_sqm > 0 || bl.high_mast_lights + bl.area_lights + bl.roadway_lights > 0)
+  const hasBuildings = bl && ((bl.buildings_annual_kwh ?? 0) + (bl.lighting_annual_kwh ?? 0) + (bl.other_annual_kwh ?? 0) > 0)
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
@@ -75,7 +74,7 @@ function TerminalDetail({ terminal }: { terminal: PieceTerminalConfig }) {
           </span>
         </div>
         <div className="flex items-center gap-5 text-xs text-[#8c8c8c]">
-          <span>{fmt(terminal.annual_teu)} {throughputLabel}</span>
+          {isContainer && <span>{fmt(terminal.annual_teu)} TEU</span>}
           <span>{terminal.berths.length} berth{terminal.berths.length !== 1 ? 's' : ''}</span>
           <span>{totalDiesel + totalElectric} equipment</span>
           {totalElectric > 0 && (
@@ -127,10 +126,12 @@ function TerminalDetail({ terminal }: { terminal: PieceTerminalConfig }) {
                 Operations
               </h4>
               <div className="flex items-center gap-6 text-sm mb-2">
-                <div>
-                  <span className="text-[#8c8c8c] text-xs">Throughput</span>
-                  <div className="text-[#414141] font-medium">{fmt(terminal.annual_teu)} {throughputLabel}/yr</div>
-                </div>
+                {isContainer && (
+                  <div>
+                    <span className="text-[#8c8c8c] text-xs">Throughput</span>
+                    <div className="text-[#414141] font-medium">{fmt(terminal.annual_teu)} TEU/yr</div>
+                  </div>
+                )}
                 <div>
                   <span className="text-[#8c8c8c] text-xs">Total Calls</span>
                   <div className="text-[#414141] font-medium">
@@ -216,47 +217,23 @@ function TerminalDetail({ terminal }: { terminal: PieceTerminalConfig }) {
               <h4 className="text-[10px] font-bold uppercase tracking-widest text-[#8c8c8c] mb-2">
                 Buildings & Lighting
               </h4>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                {bl.warehouse_sqm > 0 && (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                {(bl.buildings_annual_kwh ?? 0) > 0 && (
                   <div>
-                    <span className="text-[#8c8c8c] text-xs">Warehouse</span>
-                    <div className="text-[#414141] font-medium">{fmt(bl.warehouse_sqm)} m²</div>
+                    <span className="text-[#8c8c8c] text-xs">Buildings</span>
+                    <div className="text-[#414141] font-medium">{fmt(bl.buildings_annual_kwh)} kWh/yr</div>
                   </div>
                 )}
-                {bl.office_sqm > 0 && (
+                {(bl.lighting_annual_kwh ?? 0) > 0 && (
                   <div>
-                    <span className="text-[#8c8c8c] text-xs">Office</span>
-                    <div className="text-[#414141] font-medium">{fmt(bl.office_sqm)} m²</div>
+                    <span className="text-[#8c8c8c] text-xs">Lighting</span>
+                    <div className="text-[#414141] font-medium">{fmt(bl.lighting_annual_kwh)} kWh/yr</div>
                   </div>
                 )}
-                {bl.workshop_sqm > 0 && (
+                {(bl.other_annual_kwh ?? 0) > 0 && (
                   <div>
-                    <span className="text-[#8c8c8c] text-xs">Workshop</span>
-                    <div className="text-[#414141] font-medium">{fmt(bl.workshop_sqm)} m²</div>
-                  </div>
-                )}
-                {bl.high_mast_lights > 0 && (
-                  <div>
-                    <span className="text-[#8c8c8c] text-xs">High Mast Lights</span>
-                    <div className="text-[#414141] font-medium">{bl.high_mast_lights}</div>
-                  </div>
-                )}
-                {bl.area_lights > 0 && (
-                  <div>
-                    <span className="text-[#8c8c8c] text-xs">Area Lights</span>
-                    <div className="text-[#414141] font-medium">{bl.area_lights}</div>
-                  </div>
-                )}
-                {bl.roadway_lights > 0 && (
-                  <div>
-                    <span className="text-[#8c8c8c] text-xs">Roadway Lights</span>
-                    <div className="text-[#414141] font-medium">{bl.roadway_lights}</div>
-                  </div>
-                )}
-                {bl.annual_operating_hours > 0 && bl.annual_operating_hours !== 8760 && (
-                  <div>
-                    <span className="text-[#8c8c8c] text-xs">Operating Hours</span>
-                    <div className="text-[#414141] font-medium">{fmt(bl.annual_operating_hours)} h/year</div>
+                    <span className="text-[#8c8c8c] text-xs">Other</span>
+                    <div className="text-[#414141] font-medium">{fmt(bl.other_annual_kwh)} kWh/yr</div>
                   </div>
                 )}
               </div>

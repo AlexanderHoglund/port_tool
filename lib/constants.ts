@@ -331,7 +331,10 @@ export const ASSUMPTION_TABLES: { key: AssumptionTableKey; label: string; descri
 ]
 
 // Columns to hide in the UI
-export const HIDDEN_COLUMNS = ['id', 'created_at']
+export const HIDDEN_COLUMNS = [
+  'id', 'created_at',
+  'assumption_key', 'equipment_key', 'evse_key', 'vessel_segment_key', 'component_key',
+]
 
 // Columns that should not be editable (identifiers, display names, text descriptors)
 export const NON_EDITABLE_COLUMNS = [

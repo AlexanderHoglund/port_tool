@@ -39,18 +39,11 @@ export type BerthDefinition = {
   dc_existing: boolean         // Does this berth already have DC charging infrastructure?
 }
 
-/** Buildings & lighting configuration */
+/** Buildings & lighting configuration — annual energy consumption */
 export type BuildingsLightingConfig = {
-  // Buildings (square meters)
-  warehouse_sqm: number
-  office_sqm: number
-  workshop_sqm: number
-  // Lighting (unit counts)
-  high_mast_lights: number      // 1000W each
-  area_lights: number           // 400W each
-  roadway_lights: number        // 250W each
-  // Operating hours
-  annual_operating_hours: number  // Default: 8760 (24/7)
+  buildings_annual_kwh: number
+  lighting_annual_kwh: number
+  other_annual_kwh: number
 }
 
 /** Port services baseline: existing diesel and electric counts + operation parameters */
