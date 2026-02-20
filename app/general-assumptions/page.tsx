@@ -71,7 +71,7 @@ export default function GeneralAssumptionsPage() {
             Useful Data
           </h1>
           <p className="text-[15px] text-[#6b7280] max-w-2xl leading-relaxed">
-            Default values used by the PiECE Tool. These can be customised per scenario within the tool.
+            Default values used by the PIECE Tool. These can be customised per scenario within the tool.
           </p>
         </div>
 
@@ -191,10 +191,10 @@ export default function GeneralAssumptionsPage() {
         {/* Info note */}
         <div className="mt-10 border-t border-gray-200 pt-8">
           <p className="text-[13px] text-[#9ca3af] leading-relaxed max-w-2xl">
-            These are the default values used by all PiECE Tool calculations.
+            These are the default values used by all PIECE Tool calculations.
             To customise assumptions for a specific scenario, open the{' '}
             <a href="/piece/assumptions" className="text-[#2c3e50] underline underline-offset-2">Assumptions page</a>{' '}
-            within the PiECE Tool.
+            within the PIECE Tool.
           </p>
         </div>
       </div>

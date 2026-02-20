@@ -15,7 +15,7 @@ type Props = {
 
 const TABS: { key: DashboardTab; label: string; color: string; activeBg: string; checkBg: string; icon: string }[] = [
   { key: 'baseline', label: 'Baseline', color: '#3c5e86', activeBg: 'bg-[#d4eefa]', checkBg: 'bg-[#3c5e86]', icon: '/Icons/Icons/Shipping/Wharf.svg' },
-  { key: 'scenario', label: 'Scenario', color: '#286464', activeBg: 'bg-[#dcf0d6]', checkBg: 'bg-[#286464]', icon: '/Icons/Icons/Energy & Fuels/Electric power.svg' },
+  { key: 'scenario', label: 'Scenarios', color: '#286464', activeBg: 'bg-[#dcf0d6]', checkBg: 'bg-[#286464]', icon: '/Icons/Icons/Energy & Fuels/Electric power.svg' },
   { key: 'results', label: 'Results', color: '#bc8e54', activeBg: 'bg-[#fceec8]', checkBg: 'bg-[#bc8e54]', icon: '/Icons/Icons/Efficiency/Bar chart growth.svg' },
   { key: 'compare', label: 'Compare', color: '#7c5e8a', activeBg: 'bg-[#ede4f2]', checkBg: 'bg-[#7c5e8a]', icon: '/Icons/Icons/Efficiency/Arrow two directions.svg' },
 ]

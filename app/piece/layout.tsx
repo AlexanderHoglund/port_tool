@@ -20,11 +20,11 @@ export default function PieceLayout({ children }: { children: React.ReactNode })
     <PieceProvider>
       {/* Outer frame — light gray container that signals "you're inside the tool" */}
       <div className="mx-3 sm:mx-5 lg:mx-8 my-4 bg-[#f5f6f7] rounded-2xl border border-gray-200 min-h-[calc(100vh-140px)]">
-        {/* Internal PiECE nav */}
+        {/* Internal PIECE nav */}
         <div className="bg-white border-b border-gray-200 rounded-t-2xl">
           <div className="max-w-7xl mx-auto px-6 flex items-center h-12 gap-1">
             <span className="text-[10px] font-bold uppercase tracking-widest text-[#8c8c8c] mr-4">
-              PiECE Tool
+              PIECE Tool
             </span>
             {NAV_ITEMS.map((item) => {
               const active = isActive(item)

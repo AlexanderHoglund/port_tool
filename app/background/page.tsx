@@ -86,7 +86,7 @@ export default function BackgroundPage() {
             </div>
             <p>
               Electrifying terminal equipment and providing shore power directly reduces Scope 1 and
-              Scope 3 emissions, while grid decarbonisation addresses Scope 2. The PiECE Tool quantifies
+              Scope 3 emissions, while grid decarbonisation addresses Scope 2. The PIECE Tool quantifies
               these reductions on a per-terminal, per-equipment basis.
             </p>
           </div>
@@ -189,7 +189,7 @@ export default function BackgroundPage() {
               </div>
             </div>
             <p>
-              The PiECE Tool helps port authorities and terminal operators evaluate the full cost
+              The PIECE Tool helps port authorities and terminal operators evaluate the full cost
               and benefit of this transition &mdash; from individual equipment conversion to port-wide
               grid infrastructure sizing.
             </p>
@@ -211,7 +211,7 @@ export default function BackgroundPage() {
               href="/piece"
               className="inline-flex items-center gap-2 text-[15px] font-medium text-[#2c3e50] hover:text-[#3c5e86] transition-colors group"
             >
-              Open the PiECE Tool
+              Open the PIECE Tool
               <span className="text-lg transition-transform group-hover:translate-x-1">&rarr;</span>
             </Link>
           </div>

@@ -40,7 +40,7 @@ export default function LandingPage() {
               equipment with electric alternatives.
             </p>
             <p>
-              The <strong className="text-[#2c3e50] font-medium">PiECE Tool</strong> (Port
+              The <strong className="text-[#2c3e50] font-medium">PIECE Tool</strong> (Port
               Infrastructure for Electric &amp; Clean Energy) enables port authorities and terminal
               operators to evaluate the capital investment, operating costs, and
               CO&#x2082; savings of electrifying port terminal operations — from individual
@@ -56,7 +56,7 @@ export default function LandingPage() {
           Features Available
         </h2>
         <p className="text-[15px] text-[#4b5563] leading-[1.75] mb-8 max-w-3xl">
-          The PiECE Tool currently offers port-level electrification scenario modelling,
+          The PIECE Tool currently offers port-level electrification scenario modelling,
           including CAPEX and OPEX estimation for shore power, electric cranes, and yard
           equipment — alongside a regulatory background section covering FuelEU Maritime and
           Science Based Targets, reference data for equipment specs and grid parameters,
@@ -74,7 +74,7 @@ export default function LandingPage() {
               />
             </div>
             <h3 className="text-[15px] font-medium text-[#2c3e50] group-hover:text-[#3c5e86] transition-colors">
-              PiECE Tool
+              PIECE Tool
             </h3>
             <p className="text-[13px] text-[#6b7280] mt-1 leading-relaxed">
               Evaluate electrification CAPEX, OPEX, and CO&#x2082; savings for your port
@@ -131,7 +131,7 @@ export default function LandingPage() {
               Tutorial
             </h3>
             <p className="text-[13px] text-[#6b7280] mt-1 leading-relaxed">
-              Step-by-step guide to using the PiECE Tool
+              Step-by-step guide to using the PIECE Tool
             </p>
           </Link>
         </div>

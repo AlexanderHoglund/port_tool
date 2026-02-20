@@ -11,7 +11,7 @@ const STEPS = [
     borderColor: '#d4eefa',
     summary: 'Set up a new port project to organise your baseline and scenarios.',
     details: [
-      'Navigate to the Projects page within the PiECE Tool',
+      'Navigate to the Projects page within the PIECE Tool',
       'Click "+ New Project" and enter a project name',
       'Add port details: name, location, and optional size category',
       'The project stores your baseline and can hold multiple electrification scenarios',
@@ -59,7 +59,7 @@ const STEPS = [
     color: '#bc8e54',
     bgColor: '#fcf8e4',
     borderColor: '#fceec8',
-    summary: 'The PiECE engine computes CAPEX, OPEX, and CO\u2082 savings for your scenario.',
+    summary: 'The PIECE engine computes CAPEX, OPEX, and CO\u2082 savings for your scenario.',
     details: [
       'Equipment CAPEX — conversion costs and new electric unit purchases',
       'EVSE infrastructure — chargers sized to each equipment category',
@@ -95,7 +95,7 @@ const STEPS = [
     borderColor: '#dce8da',
     summary: 'Override default economic, equipment, or grid parameters for sensitivity analysis.',
     details: [
-      'Navigate to the Project Assumptions page within the PiECE Tool',
+      'Navigate to the Project Assumptions page within the PIECE Tool',
       'Click any numeric cell to override the default value',
       'Overrides are shown in blue with the original in parentheses',
       'Each scenario maintains its own set of overrides',
@@ -144,7 +144,7 @@ export default function TutorialPage() {
       {/* Page header — MMMCZCS style */}
       <div className="max-w-[1400px] mx-auto px-5 lg:px-8 pt-10">
         <h1 className="text-[30px] sm:text-[48px] font-extralight text-[#2c3e50] leading-[1.15] tracking-[-0.02em] mb-4 max-w-3xl">
-          How to Use the PiECE Tool
+          How to Use the PIECE Tool
         </h1>
         <p className="text-[15px] text-[#6b7280] max-w-2xl leading-relaxed mb-10">
           A step-by-step guide to evaluating port electrification investments — from
@@ -281,7 +281,7 @@ export default function TutorialPage() {
             What the Tool Calculates
           </h2>
           <p className="text-[15px] text-[#6b7280] mb-8 max-w-2xl leading-relaxed">
-            The PiECE engine produces a comprehensive breakdown across six key output categories.
+            The PIECE engine produces a comprehensive breakdown across six key output categories.
           </p>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
@@ -319,7 +319,7 @@ export default function TutorialPage() {
               href="/piece"
               className="inline-flex items-center gap-2 text-[15px] font-medium text-[#2c3e50] hover:text-[#3c5e86] transition-colors group"
             >
-              Open the PiECE Tool
+              Open the PIECE Tool
               <span className="text-lg transition-transform group-hover:translate-x-1">&rarr;</span>
             </Link>
           </div>

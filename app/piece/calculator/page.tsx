@@ -21,6 +21,7 @@ import DashboardTabs, { type DashboardTab } from '@/components/shipping/Dashboar
 import ScenarioSubTabs from '@/components/shipping/ScenarioSubTabs'
 import BaselineSummary from '@/components/shipping/BaselineSummary'
 import PortServicesSection from '@/components/shipping/PortServicesSection'
+import CollapsibleSection from '@/components/shipping/CollapsibleSection'
 import CompareSection from '@/components/shipping/CompareSection'
 import SaveStatusIndicator from '@/components/shipping/SaveStatusIndicator'
 import { usePieceContext, createDefaultTerminal } from '../context/PieceContext'
@@ -501,6 +502,8 @@ export default function CalculatorPage() {
     try {
       const projectRow = await loadProjectRow(activeProjectId!)
       const scenarioRow = await loadScenarioRow(scenarioId)
+      // Stay on current tab — skip the useEffect that forces tab switch
+      skipTabSwitchRef.current = true
       loadProjectScenario(projectRow, scenarioRow)
       dirtyRef.current = false
     } catch (err) {
@@ -555,6 +558,8 @@ export default function CalculatorPage() {
       })
       const scenarioRow = await loadScenarioRow(scenarioId)
       const projectRow = await loadProjectRow(activeProjectId)
+      // Stay on Scenario tab — skip the useEffect that forces tab switch
+      skipTabSwitchRef.current = true
       loadProjectScenario(projectRow, scenarioRow)
       await refreshScenarioList()
       dirtyRef.current = false
@@ -841,18 +846,25 @@ export default function CalculatorPage() {
                       </section>
 
                       {/* Offshore Equipment (Port-Wide) */}
-                      <section className="space-y-3 mt-6">
-                        <h3 className="text-[11px] font-bold uppercase tracking-widest text-[#8c8c8c]">
-                          Offshore Equipment
-                        </h3>
-                        <div className="bg-white rounded-xl border border-gray-200 p-6">
-                          <PortServicesSection
-                            baseline={portServicesBaseline ?? DEFAULT_PORT_SERVICES_BASELINE}
-                            scenario={portServicesScenario ?? DEFAULT_PORT_SERVICES_SCENARIO}
-                            onBaselineChange={setPortServicesBaseline}
-                            onScenarioChange={setPortServicesScenario}
-                            mode="baseline"
-                          />
+                      <section className="mt-6">
+                        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                          <CollapsibleSection
+                            title="Offshore Equipment (Port-Wide)"
+                            badge={(() => {
+                              const bl = portServicesBaseline ?? DEFAULT_PORT_SERVICES_BASELINE
+                              const total = bl.tugs_diesel + bl.tugs_electric + bl.pilot_boats_diesel + bl.pilot_boats_electric
+                              return total > 0 ? `${total} vessels` : undefined
+                            })()}
+                            defaultOpen={false}
+                          >
+                            <PortServicesSection
+                              baseline={portServicesBaseline ?? DEFAULT_PORT_SERVICES_BASELINE}
+                              scenario={portServicesScenario ?? DEFAULT_PORT_SERVICES_SCENARIO}
+                              onBaselineChange={setPortServicesBaseline}
+                              onScenarioChange={setPortServicesScenario}
+                              mode="baseline"
+                            />
+                          </CollapsibleSection>
                         </div>
                       </section>
                     </div>
@@ -885,10 +897,10 @@ export default function CalculatorPage() {
             <div className="bg-[#eefae8] rounded-2xl p-8 border border-[#dcf0d6]">
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-8 h-8 rounded-full bg-[#286464] text-white flex items-center justify-center text-sm font-bold">
-                  3
+                  2
                 </div>
                 <div>
-                  <h2 className="text-xl font-semibold text-[#414141]">Electrification Scenario</h2>
+                  <h2 className="text-xl font-semibold text-[#414141]">Electrification Scenarios</h2>
                   <p className="text-sm text-[#8c8c8c]">Configure what you want to electrify - equipment, shore power berths, chargers, and grid infrastructure</p>
                 </div>
               </div>
@@ -922,18 +934,42 @@ export default function CalculatorPage() {
                 </section>
 
                 {/* Offshore Equipment Changes (Port-Wide) */}
-                <section className="space-y-3 mt-6">
-                  <h3 className="text-[11px] font-bold uppercase tracking-widest text-[#8c8c8c]">
-                    Offshore Equipment Changes
-                  </h3>
-                  <div className="bg-white rounded-xl border border-gray-200 p-6">
-                    <PortServicesSection
-                      baseline={portServicesBaseline ?? DEFAULT_PORT_SERVICES_BASELINE}
-                      scenario={portServicesScenario ?? DEFAULT_PORT_SERVICES_SCENARIO}
-                      onBaselineChange={setPortServicesBaseline}
-                      onScenarioChange={setPortServicesScenario}
-                      mode="scenario"
-                    />
+                <section className="mt-6">
+                  <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                    <CollapsibleSection
+                      title="Offshore Equipment (Port-Wide)"
+                      badge={(() => {
+                        const bl = portServicesBaseline ?? DEFAULT_PORT_SERVICES_BASELINE
+                        const sc = portServicesScenario ?? DEFAULT_PORT_SERVICES_SCENARIO
+                        const totalConvert = sc.tugs_to_convert + sc.pilot_boats_to_convert
+                        const totalAdd = sc.tugs_to_add + sc.pilot_boats_to_add
+                        if (totalConvert > 0 || totalAdd > 0) {
+                          const parts: string[] = []
+                          if (totalConvert > 0) parts.push(`${totalConvert} converting`)
+                          if (totalAdd > 0) parts.push(`${totalAdd} new`)
+                          return parts.join(', ')
+                        }
+                        return undefined
+                      })()}
+                      defaultOpen={false}
+                      status={(() => {
+                        const bl = portServicesBaseline ?? DEFAULT_PORT_SERVICES_BASELINE
+                        const sc = portServicesScenario ?? DEFAULT_PORT_SERVICES_SCENARIO
+                        const hasChanges = sc.tugs_to_convert > 0 || sc.tugs_to_add > 0 || sc.pilot_boats_to_convert > 0 || sc.pilot_boats_to_add > 0
+                        if (hasChanges) return 'modified' as const
+                        const hasDiesel = bl.tugs_diesel > 0 || bl.pilot_boats_diesel > 0
+                        if (hasDiesel) return 'alterable' as const
+                        return undefined
+                      })()}
+                    >
+                      <PortServicesSection
+                        baseline={portServicesBaseline ?? DEFAULT_PORT_SERVICES_BASELINE}
+                        scenario={portServicesScenario ?? DEFAULT_PORT_SERVICES_SCENARIO}
+                        onBaselineChange={setPortServicesBaseline}
+                        onScenarioChange={setPortServicesScenario}
+                        mode="scenario"
+                      />
+                    </CollapsibleSection>
                   </div>
                 </section>
               </div>
@@ -978,7 +1014,7 @@ export default function CalculatorPage() {
             <div className="bg-[#fcf8e4] rounded-2xl p-8 border border-[#fceec8]">
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-8 h-8 rounded-full bg-[#bc8e54] text-white flex items-center justify-center text-sm font-bold">
-                  4
+                  3
                 </div>
                 <div>
                   <h2 className="text-xl font-semibold text-[#414141]">Results</h2>
@@ -1050,7 +1086,7 @@ export default function CalculatorPage() {
             <div className="bg-[#f5f0f8] rounded-2xl p-8 border border-[#ede4f2]">
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-8 h-8 rounded-full bg-[#7c5e8a] text-white flex items-center justify-center text-sm font-bold">
-                  5
+                  4
                 </div>
                 <div>
                   <h2 className="text-xl font-semibold text-[#414141]">Compare Scenarios</h2>

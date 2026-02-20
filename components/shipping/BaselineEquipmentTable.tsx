@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import Image from 'next/image'
 import type { TerminalType, BaselineEquipmentEntry } from '@/lib/types'
 import { createClient } from '@/utils/supabase/client'
 import { usePieceContext } from '@/app/piece/context/PieceContext'
@@ -54,6 +55,20 @@ const PIECE_EQUIPMENT: EquipmentMeta[] = [
   { key: 'rs', name: 'Reach Stacker', category: 'mobile', type: 'yard', terminalTypes: ['container', 'roro'] },
   { key: 'sc', name: 'Straddle Carrier', category: 'mobile', type: 'yard', terminalTypes: ['container'] },
 ]
+
+const EQUIPMENT_IMAGES: Record<string, string> = {
+  mhc: '/port_images/mobile harbour crane.jpg',
+  sts: '/port_images/ship_to_shore.png',
+  rmg: '/port_images/Rail Mounted Gantry Crane.jpg',
+  rtg: '/port_images/Rubber Tired Gantry Crane.jpg',
+  asc: '/port_images/Automated Stacking Crane.jpg',
+  reefer: '/port_images/Refrigerated Container Power Supply Units.jpg',
+  agv: '/port_images/Automated Guided Vehicle.png',
+  tt: '/port_images/Terminal Tractor.png',
+  ech: '/port_images/Empty Container Handler.png',
+  rs: '/port_images/Reach Stacker.jpg',
+  sc: '/port_images/Straddle Carrier.jpg',
+}
 
 const CATEGORIES = [
   { key: 'grid_powered', label: 'Grid-Powered Equipment', sublabel: '(always electric)', color: '#4a90b8' },
@@ -184,74 +199,89 @@ function EquipmentRow({
         <tr className="border-b border-gray-100">
           <td colSpan={6} className="p-0">
             <div className="bg-[#f5f5f5] px-8 py-3 text-xs space-y-2">
-              <div><span className="text-[#777]">Type:</span> <span className="text-[#444]">{meta.type}</span></div>
+              <div className="inline-flex gap-6">
+                <div className="space-y-2">
+                  <div><span className="text-[#777]">Type:</span> <span className="text-[#444]">{meta.type}</span></div>
 
-              {/* OPEX — editable */}
-              <div className="flex items-center gap-2">
-                <span className="text-[#777] w-16">OPEX:</span>
-                <span className="text-[#777] text-xs">$</span>
-                <input
-                  type="number"
-                  min={0}
-                  step={1000}
-                  value={opexStr}
-                  onChange={(e) => setOpexStr(e.target.value)}
-                  onBlur={handleOpexBlur}
-                  className={`w-32 px-2 py-1 rounded border text-xs text-[#414141] focus:outline-none ${
-                    opexHasOverride
-                      ? 'border-blue-300 bg-blue-50/40 focus:border-blue-500'
-                      : 'border-gray-300 bg-white focus:border-[#3c5e86]'
-                  }`}
-                />
-                <span className="text-[#888] text-[10px]">USD/unit/year</span>
-                {opexHasOverride && (
-                  <span className="text-[10px] text-blue-500 font-medium">custom (default: ${defaults.annual_opex_usd.toLocaleString()} USD)</span>
+                  {/* OPEX — editable */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[#777] w-16">OPEX:</span>
+                    <span className="text-[#777] text-xs">$</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1000}
+                      value={opexStr}
+                      onChange={(e) => setOpexStr(e.target.value)}
+                      onBlur={handleOpexBlur}
+                      className={`w-32 px-2 py-1 rounded border text-xs text-[#414141] focus:outline-none ${
+                        opexHasOverride
+                          ? 'border-blue-300 bg-blue-50/40 focus:border-blue-500'
+                          : 'border-gray-300 bg-white focus:border-[#3c5e86]'
+                      }`}
+                    />
+                    <span className="text-[#888] text-[10px]">USD/unit/year</span>
+                    {opexHasOverride && (
+                      <span className="text-[10px] text-blue-500 font-medium">custom (default: ${defaults.annual_opex_usd.toLocaleString()} USD)</span>
+                    )}
+                  </div>
+
+                  {/* kWh/TEU — editable */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[#777] w-16">kWh/TEU:</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step={0.1}
+                      value={kwhStr}
+                      onChange={(e) => setKwhStr(e.target.value)}
+                      onBlur={handleKwhBlur}
+                      className={`w-32 px-2 py-1 rounded border text-xs text-[#414141] focus:outline-none ${
+                        kwhHasOverride
+                          ? 'border-blue-300 bg-blue-50/40 focus:border-blue-500'
+                          : 'border-gray-300 bg-white focus:border-[#3c5e86]'
+                      }`}
+                    />
+                    {kwhHasOverride && (
+                      <span className="text-[10px] text-blue-500 font-medium">custom (default: {defaults.kwh_per_teu})</span>
+                    )}
+                  </div>
+
+                  {/* Peak kW — editable */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[#777] w-16">Peak kW:</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step={10}
+                      value={peakStr}
+                      onChange={(e) => setPeakStr(e.target.value)}
+                      onBlur={handlePeakBlur}
+                      className={`w-32 px-2 py-1 rounded border text-xs text-[#414141] focus:outline-none ${
+                        peakHasOverride
+                          ? 'border-blue-300 bg-blue-50/40 focus:border-blue-500'
+                          : 'border-gray-300 bg-white focus:border-[#3c5e86]'
+                      }`}
+                    />
+                    {peakHasOverride && (
+                      <span className="text-[10px] text-blue-500 font-medium">custom (default: {defaults.peak_power_kw})</span>
+                    )}
+                  </div>
+
+                  <div className="text-[10px] text-[#888] mt-1">Synced with Assumptions tab</div>
+                </div>
+                {EQUIPMENT_IMAGES[meta.key] && (
+                  <div className="w-40 relative rounded-lg overflow-hidden shrink-0 border border-gray-200 self-stretch">
+                    <Image
+                      src={EQUIPMENT_IMAGES[meta.key]}
+                      alt={meta.name}
+                      fill
+                      className="object-cover"
+                      sizes="160px"
+                    />
+                  </div>
                 )}
               </div>
-
-              {/* kWh/TEU — editable */}
-              <div className="flex items-center gap-2">
-                <span className="text-[#777] w-16">kWh/TEU:</span>
-                <input
-                  type="number"
-                  min={0}
-                  step={0.1}
-                  value={kwhStr}
-                  onChange={(e) => setKwhStr(e.target.value)}
-                  onBlur={handleKwhBlur}
-                  className={`w-32 px-2 py-1 rounded border text-xs text-[#414141] focus:outline-none ${
-                    kwhHasOverride
-                      ? 'border-blue-300 bg-blue-50/40 focus:border-blue-500'
-                      : 'border-gray-300 bg-white focus:border-[#3c5e86]'
-                  }`}
-                />
-                {kwhHasOverride && (
-                  <span className="text-[10px] text-blue-500 font-medium">custom (default: {defaults.kwh_per_teu})</span>
-                )}
-              </div>
-
-              {/* Peak kW — editable */}
-              <div className="flex items-center gap-2">
-                <span className="text-[#777] w-16">Peak kW:</span>
-                <input
-                  type="number"
-                  min={0}
-                  step={10}
-                  value={peakStr}
-                  onChange={(e) => setPeakStr(e.target.value)}
-                  onBlur={handlePeakBlur}
-                  className={`w-32 px-2 py-1 rounded border text-xs text-[#414141] focus:outline-none ${
-                    peakHasOverride
-                      ? 'border-blue-300 bg-blue-50/40 focus:border-blue-500'
-                      : 'border-gray-300 bg-white focus:border-[#3c5e86]'
-                  }`}
-                />
-                {peakHasOverride && (
-                  <span className="text-[10px] text-blue-500 font-medium">custom (default: {defaults.peak_power_kw})</span>
-                )}
-              </div>
-
-              <div className="text-[10px] text-[#888] mt-1">Synced with Assumptions tab</div>
             </div>
           </td>
         </tr>

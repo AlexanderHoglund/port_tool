@@ -148,6 +148,7 @@ export default function PieceTerminalCard({
   const vesselCallCount = (terminal.vessel_calls ?? []).reduce((s, c) => s + c.annual_calls, 0)
   const opsExistingCount = terminal.berths.filter((b) => b.ops_existing).length
   const opsScenarioCount = terminal.berth_scenarios?.filter((b) => b.ops_enabled).length ?? 0
+  const dcScenarioCount = terminal.berth_scenarios?.filter((b) => b.dc_enabled).length ?? 0
   const totalOpsCount = opsExistingCount + opsScenarioCount
 
   // Derive max vessel label from berths (largest max_vessel_segment_key across all berths)
@@ -349,6 +350,13 @@ export default function PieceTerminalCard({
                 title="Shore Power (OPS/DC)"
                 badge={totalOpsCount > 0 ? `${totalOpsCount}/${berthCount} berths with OPS` : undefined}
                 defaultOpen={false}
+                status={
+                  opsScenarioCount > 0 || dcScenarioCount > 0
+                    ? 'modified'
+                    : berthCount > 0
+                      ? 'alterable'
+                      : undefined
+                }
               >
                 <BerthScenarioPanel
                   berths={terminal.berths}
@@ -363,6 +371,13 @@ export default function PieceTerminalCard({
                 <CollapsibleSection
                   title="Onshore Equipment Changes"
                   defaultOpen={false}
+                  status={(() => {
+                    const sc = terminal.scenario_equipment
+                    const hasChanges = Object.values(sc).some((e) => e && (e.num_to_convert > 0 || e.num_to_add > 0))
+                    if (hasChanges) return 'modified' as const
+                    if (baselineDieselCount > 0) return 'alterable' as const
+                    return undefined
+                  })()}
                 >
                   <ScenarioEquipmentTable
                     terminalType={terminal.terminal_type}
@@ -378,6 +393,13 @@ export default function PieceTerminalCard({
                 <CollapsibleSection
                   title="Chargers (EVSE)"
                   defaultOpen={false}
+                  status={
+                    terminal.charger_overrides && Object.keys(terminal.charger_overrides).length > 0
+                      ? 'modified'
+                      : scenarioTotalElectric > 0
+                        ? 'alterable'
+                        : undefined
+                  }
                 >
                   <ChargerPanel
                     scenarioEquipment={scenarioElectricEquipment}
@@ -393,6 +415,11 @@ export default function PieceTerminalCard({
               <CollapsibleSection
                 title="Grid Infrastructure"
                 defaultOpen={false}
+                status={
+                  terminal.cable_length_m && terminal.cable_length_m !== 500
+                    ? 'modified'
+                    : 'alterable'
+                }
               >
                 <GridInfraPanel
                   cableLengthM={terminal.cable_length_m ?? 500}

@@ -8,7 +8,7 @@ import { usePathname } from 'next/navigation'
 const NAV_LINKS = [
   { href: '/background', label: 'Background' },
   { href: '/general-assumptions', label: 'Useful Data' },
-  { href: '/piece', label: 'PiECE Tool' },
+  { href: '/piece', label: 'PIECE Tool' },
   { href: '/tutorial', label: 'Tutorial' },
 ]
 
@@ -16,7 +16,7 @@ const DIAMOND_BUTTONS = [
   { href: '/', label: 'Homepage', color: '#6b7280' },
   { href: '/background', label: 'Background', color: '#3c5e86' },
   { href: '/general-assumptions', label: 'Useful Data', color: '#bc8e54' },
-  { href: '/piece', label: 'PiECE Tool', color: '#286464' },
+  { href: '/piece', label: 'PIECE Tool', color: '#286464' },
   { href: '/tutorial', label: 'Tutorial', color: '#8b6baa' },
 ]
 
@@ -49,7 +49,7 @@ export default function SiteNavWrapper() {
           <Link href="/" className="flex items-center gap-3 shrink-0">
             <Image
               src="/200w.gif"
-              alt="PiECE Tool"
+              alt="PIECE Tool"
               width={200}
               height={66}
               className={`h-9 w-auto transition-all duration-300 ${
@@ -63,7 +63,7 @@ export default function SiteNavWrapper() {
                   scrolled ? 'text-white' : 'text-[#2c3e50]'
                 }`}
               >
-                PiECE Tool
+                PIECE Tool
               </div>
               <div
                 className={`text-[10px] mt-0.5 transition-colors duration-300 ${

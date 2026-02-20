@@ -7,6 +7,8 @@ type Props = {
   badge?: React.ReactNode
   defaultOpen?: boolean
   children: React.ReactNode
+  /** 'alterable' = baseline has something to change (star), 'modified' = changes applied (green check) */
+  status?: 'alterable' | 'modified'
 }
 
 export default function CollapsibleSection({
@@ -14,6 +16,7 @@ export default function CollapsibleSection({
   badge,
   defaultOpen = false,
   children,
+  status,
 }: Props) {
   const [open, setOpen] = useState(defaultOpen)
 
@@ -32,9 +35,19 @@ export default function CollapsibleSection({
             {title}
           </span>
         </div>
-        {badge && (
-          <span className="text-[11px] text-[#777] font-medium">{badge}</span>
-        )}
+        <div className="flex items-center gap-3">
+          {badge && (
+            <span className="text-[11px] text-[#777] font-medium">{badge}</span>
+          )}
+          {status === 'modified' && (
+            <span className="w-5 h-5 rounded-full bg-[#286464] text-white flex items-center justify-center text-[10px] font-bold shrink-0" title="Changes applied">
+              &#x2713;
+            </span>
+          )}
+          {status === 'alterable' && (
+            <span className="w-2 h-2 rounded-full bg-[#bc8e54] shrink-0" title="Customizable" />
+          )}
+        </div>
       </button>
       {open && (
         <div className="px-6 py-4">

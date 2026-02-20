@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import Image from 'next/image'
 import type { TerminalType, BaselineEquipmentEntry, ScenarioEquipmentEntry } from '@/lib/types'
 import { createClient } from '@/utils/supabase/client'
 import { usePieceContext } from '@/app/piece/context/PieceContext'
@@ -54,6 +55,20 @@ const PIECE_EQUIPMENT: EquipmentMeta[] = [
   { key: 'rs', name: 'Reach Stacker', category: 'mobile', type: 'yard', terminalTypes: ['container', 'roro'] },
   { key: 'sc', name: 'Straddle Carrier', category: 'mobile', type: 'yard', terminalTypes: ['container'] },
 ]
+
+const EQUIPMENT_IMAGES: Record<string, string> = {
+  mhc: '/port_images/mobile harbour crane.jpg',
+  sts: '/port_images/ship_to_shore.png',
+  rmg: '/port_images/Rail Mounted Gantry Crane.jpg',
+  rtg: '/port_images/Rubber Tired Gantry Crane.jpg',
+  asc: '/port_images/Automated Stacking Crane.jpg',
+  reefer: '/port_images/Refrigerated Container Power Supply Units.jpg',
+  agv: '/port_images/Automated Guided Vehicle.png',
+  tt: '/port_images/Terminal Tractor.png',
+  ech: '/port_images/Empty Container Handler.png',
+  rs: '/port_images/Reach Stacker.jpg',
+  sc: '/port_images/Straddle Carrier.jpg',
+}
 
 const CATEGORIES = [
   { key: 'grid_powered', label: 'Grid-Powered Equipment', sublabel: '(add new only)', color: '#4a90b8' },
@@ -269,12 +284,27 @@ function EquipmentRow({
         <tr className="border-b border-gray-100">
           <td colSpan={7} className="p-0">
             <div className="bg-[#f5f5f5] px-8 py-3 text-xs space-y-2">
-              <div><span className="text-[#777]">Type:</span> <span className="text-[#444]">{meta.type}</span></div>
-              {specInput('CAPEX', capexStr, setCapexStr, 'capex_usd', capexHasOverride, defaults.capex_usd, 10000, '/unit')}
-              {specInput('OPEX', opexStr, setOpexStr, 'annual_opex_usd', opexHasOverride, defaults.annual_opex_usd, 1000, '/unit/year')}
-              {specInput('kWh/TEU', kwhStr, setKwhStr, 'kwh_per_teu', kwhHasOverride, defaults.kwh_per_teu, 0.1)}
-              {specInput('Peak kW', peakStr, setPeakStr, 'peak_power_kw', peakHasOverride, defaults.peak_power_kw, 10)}
-              <div className="text-[10px] text-[#888] mt-1">Synced with Assumptions tab</div>
+              <div className="inline-flex gap-6">
+                <div className="space-y-2">
+                  <div><span className="text-[#777]">Type:</span> <span className="text-[#444]">{meta.type}</span></div>
+                  {specInput('CAPEX', capexStr, setCapexStr, 'capex_usd', capexHasOverride, defaults.capex_usd, 10000, '/unit')}
+                  {specInput('OPEX', opexStr, setOpexStr, 'annual_opex_usd', opexHasOverride, defaults.annual_opex_usd, 1000, '/unit/year')}
+                  {specInput('kWh/TEU', kwhStr, setKwhStr, 'kwh_per_teu', kwhHasOverride, defaults.kwh_per_teu, 0.1)}
+                  {specInput('Peak kW', peakStr, setPeakStr, 'peak_power_kw', peakHasOverride, defaults.peak_power_kw, 10)}
+                  <div className="text-[10px] text-[#888] mt-1">Synced with Assumptions tab</div>
+                </div>
+                {EQUIPMENT_IMAGES[meta.key] && (
+                  <div className="w-40 relative rounded-lg overflow-hidden shrink-0 border border-gray-200 self-stretch">
+                    <Image
+                      src={EQUIPMENT_IMAGES[meta.key]}
+                      alt={meta.name}
+                      fill
+                      className="object-cover"
+                      sizes="160px"
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           </td>
         </tr>
@@ -508,6 +538,15 @@ export default function ScenarioEquipmentTable({
 
   return (
     <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+      <div className="flex items-center justify-end px-4 py-2.5 border-b border-gray-100">
+        <button
+          type="button"
+          onClick={convertAll}
+          className="text-[11px] font-semibold text-[#bf360c] hover:text-[#8e2000]"
+        >
+          Convert All Diesel &rarr;
+        </button>
+      </div>
       <table className="w-full">
         <thead>
           <tr>
@@ -586,18 +625,11 @@ export default function ScenarioEquipmentTable({
         </tfoot>
       </table>
 
-      {/* Footer with helper buttons */}
-      <div className="flex items-center justify-between px-4 py-2.5 bg-[#f5f5f5] border-t border-gray-100">
+      {/* Footer */}
+      <div className="px-4 py-2.5 bg-[#f5f5f5] border-t border-gray-100">
         <div className="text-[11px] text-[#666]">
           Conversion CAPEX applies to converted units. New units use full electric CAPEX.
         </div>
-        <button
-          type="button"
-          onClick={convertAll}
-          className="text-[11px] font-semibold text-[#bf360c] hover:text-[#8e2000]"
-        >
-          Convert All Diesel →
-        </button>
       </div>
     </div>
   )

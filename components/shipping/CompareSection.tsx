@@ -585,42 +585,63 @@ export default function CompareSection({ scenarioList, activeProjectId, onCompar
         </div>
       </div>
 
-      {/* ── Environmental + Savings bars ── */}
+      {/* ── Key Differences — per-scenario columns ── */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <h3 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-[#8c8c8c] mb-5">
           <Image src="/Icons/Icons/Efficiency/Bar Chart.svg" alt="" width={16} height={16} className="opacity-40" />
           Key Differences
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <CompareBar
-            scenarios={loadedScenarios}
-            metricKey="co2_tons_saved"
-            label="CO&#8322; Reduced (tons/yr)"
-            formatFn={(v) => formatNumber(v)}
-            unit="t"
-          />
-          <CompareBar
-            scenarios={loadedScenarios}
-            metricKey="diesel_liters_saved"
-            label="Diesel Saved (L/yr)"
-            formatFn={(v) => formatNumber(v)}
-            unit="L"
-          />
-          <CompareBar
-            scenarios={loadedScenarios}
-            metricKey="annual_opex_savings_usd"
-            label="Annual OPEX Savings"
-            formatFn={(v) => formatCurrency(v) ?? '-'}
-          />
-          {loadedScenarios.some((s) => s.result.totals.simple_payback_years !== null) && (
-            <CompareBar
-              scenarios={loadedScenarios}
-              metricKey="simple_payback_years"
-              label="Simple Payback"
-              formatFn={(v) => (v !== null && v !== undefined && v > 0) ? v.toFixed(1) : 'N/A'}
-              unit="years"
-            />
-          )}
+        <div className={`grid gap-4 ${loadedScenarios.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+          {loadedScenarios.map((s, idx) => {
+            const t = s.result.totals
+            const color = getScenarioColor(idx)
+            const showPayback = t.simple_payback_years !== null && t.simple_payback_years !== undefined && t.simple_payback_years > 0
+            const keyMetrics: { label: string; value: string; key: string }[] = [
+              { label: 'CO\u2082 Reduced', value: `${formatNumber(t.co2_tons_saved)} t/yr`, key: 'co2_tons_saved' },
+              { label: 'Diesel Saved', value: `${formatNumber(t.diesel_liters_saved)} L/yr`, key: 'diesel_liters_saved' },
+              { label: 'OPEX Savings', value: `${formatCurrency(t.annual_opex_savings_usd)}/yr`, key: 'annual_opex_savings_usd' },
+              ...(showPayback
+                ? [{ label: 'Simple Payback', value: `${t.simple_payback_years!.toFixed(1)} years`, key: 'simple_payback_years' }]
+                : []),
+            ]
+
+            return (
+              <div
+                key={s.id}
+                className="rounded-xl p-5 border"
+                style={{ borderColor: color.primary + '40', backgroundColor: color.lightBg }}
+              >
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="w-3 h-3 rounded-full inline-block" style={{ backgroundColor: color.primary }} />
+                  <span className="text-sm font-semibold" style={{ color: color.primary }}>{s.name}</span>
+                </div>
+
+                <div className="space-y-3">
+                  {keyMetrics.map((m) => {
+                    const isBest = findBestIndex(m.key, loadedScenarios) === idx
+                    return (
+                      <div key={m.key}>
+                        <div className="text-[10px] text-[#8c8c8c] mb-1">{m.label}</div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-sm ${isBest ? 'font-bold' : 'font-semibold'} text-[#414141]`}>
+                            {m.value}
+                          </span>
+                          {isBest && (
+                            <span
+                              className="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded-full text-white"
+                              style={{ backgroundColor: color.primary }}
+                            >
+                              Best
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
         </div>
       </div>
 

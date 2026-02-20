@@ -1,6 +1,3 @@
-'use client'
-
-import { useState } from 'react'
 import type { BerthVesselCall, TerminalType } from '@/lib/types'
 
 type Props = {
@@ -57,32 +54,6 @@ export default function OperationsPanel({
   const segments = VESSEL_SEGMENTS[terminalType] || VESSEL_SEGMENTS.container
   const isContainer = terminalType === 'container'
 
-  // Pending total: stores user-entered total when no vessel calls exist yet.
-  // Once vessel types are added, the total is derived from their sum.
-  const [pendingTotal, setPendingTotal] = useState(0)
-
-  /** Distribute a total evenly across N vessel calls, preserving other fields */
-  function distributeEvenly(calls: BerthVesselCall[], newTotal: number): BerthVesselCall[] {
-    if (calls.length === 0) return calls
-    const base = Math.floor(newTotal / calls.length)
-    let remainder = newTotal - base * calls.length
-    return calls.map((c) => {
-      const extra = remainder > 0 ? 1 : 0
-      remainder--
-      return { ...c, annual_calls: base + extra }
-    })
-  }
-
-  function handleTotalCallsChange(newTotal: number) {
-    if (vesselCalls.length === 0) {
-      // No vessel types yet — store as pending for when types are added
-      setPendingTotal(newTotal)
-      return
-    }
-    setPendingTotal(0)
-    onVesselCallsChange(distributeEvenly(vesselCalls, newTotal))
-  }
-
   function addVesselCall() {
     const defaultKey = segments[0]?.key ?? ''
     const newCall: BerthVesselCall = {
@@ -91,11 +62,7 @@ export default function OperationsPanel({
       annual_calls: 0,
       avg_berth_hours: DEFAULT_BERTH_HOURS[defaultKey] ?? 12,
     }
-    const allCalls = [...vesselCalls, newCall]
-    // Use pending total if we had no vessel calls before, otherwise use computed sum
-    const targetTotal = vesselCalls.length === 0 && pendingTotal > 0 ? pendingTotal : computedTotal
-    onVesselCallsChange(distributeEvenly(allCalls, targetTotal))
-    setPendingTotal(0)
+    onVesselCallsChange([...vesselCalls, newCall])
   }
 
   function removeVesselCall(callId: string) {
@@ -108,9 +75,7 @@ export default function OperationsPanel({
     )
   }
 
-  const computedTotal = vesselCalls.reduce((s, c) => s + c.annual_calls, 0)
-  // Display: pending total when no vessel calls, computed sum otherwise
-  const totalCalls = vesselCalls.length === 0 ? pendingTotal : computedTotal
+  const totalCalls = vesselCalls.reduce((s, c) => s + c.annual_calls, 0)
   const totalHours = vesselCalls.reduce((s, c) => s + c.annual_calls * c.avg_berth_hours, 0)
 
   return (
@@ -137,14 +102,9 @@ export default function OperationsPanel({
           <label className="text-xs font-semibold text-[#555] whitespace-nowrap">
             Total Calls/Year
           </label>
-          <input
-            type="number"
-            min={0}
-            value={totalCalls || ''}
-            onChange={(e) => handleTotalCallsChange(parseInt(e.target.value) || 0)}
-            placeholder="0"
-            className="w-28 px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-[#414141] bg-white focus:border-[#3c5e86] focus:ring-1 focus:ring-[#3c5e86] focus:outline-none text-right"
-          />
+          <span className="w-28 px-3 py-1.5 rounded-lg border border-gray-100 text-sm text-[#414141] bg-gray-50 text-right tabular-nums">
+            {totalCalls.toLocaleString() || '0'}
+          </span>
           <span className="text-[10px] text-[#999]">calls/yr</span>
         </div>
       </div>
