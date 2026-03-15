@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import type { ProjectBaseline, PieceTerminalConfig, PortServicesBaseline } from '@/lib/types'
+import CollapsibleSection from './CollapsibleSection'
 
 type Props = {
   baseline: ProjectBaseline
@@ -266,11 +267,12 @@ export default function BaselineSummary({ terminals, portServicesBaseline }: Pro
         portServicesBaseline.tugs_diesel + portServicesBaseline.tugs_electric +
         portServicesBaseline.pilot_boats_diesel + portServicesBaseline.pilot_boats_electric > 0
       ) && (
-        <div>
-          <div className="text-[11px] font-bold uppercase tracking-widest text-[#8c8c8c] mb-3">
-            Offshore Equipment
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <CollapsibleSection
+            title="Offshore Equipment (Port-Wide)"
+            badge={`${portServicesBaseline.tugs_diesel + portServicesBaseline.tugs_electric + portServicesBaseline.pilot_boats_diesel + portServicesBaseline.pilot_boats_electric} vessels`}
+            defaultOpen={false}
+          >
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
               {(portServicesBaseline.tugs_diesel > 0 || portServicesBaseline.tugs_electric > 0) && (
                 <>
@@ -297,7 +299,7 @@ export default function BaselineSummary({ terminals, portServicesBaseline }: Pro
                 </>
               )}
             </div>
-          </div>
+          </CollapsibleSection>
         </div>
       )}
     </div>

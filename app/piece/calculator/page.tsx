@@ -147,7 +147,7 @@ export default function CalculatorPage() {
   // Mark dirty on any input change
   useEffect(() => {
     dirtyRef.current = true
-  }, [port, terminals])
+  }, [port, terminals, portServicesBaseline, portServicesScenario])
 
   // ── Terminal CRUD ──
   const addTerminal = useCallback(() => {
@@ -444,7 +444,7 @@ export default function CalculatorPage() {
     setSaveStatus('saving')
     try {
       // Save baseline first, then create scenario preserving throughput data
-      const { baseline, scenario: scenarioData } = decomposePieceTerminals(terminals)
+      const { baseline, scenario: scenarioData } = decomposePieceTerminals(terminals, portServicesBaseline, portServicesScenario)
       await updateProjectBaseline(activeProjectId, { port, baseline })
 
       const scenarioId = await createScenario({
@@ -465,7 +465,7 @@ export default function CalculatorPage() {
     } catch {
       setSaveStatus('error')
     }
-  }, [activeProjectId, terminals, port, loadProjectScenario, refreshScenarioList])
+  }, [activeProjectId, terminals, port, portServicesBaseline, portServicesScenario, loadProjectScenario, refreshScenarioList])
 
   // ── Tab change with auto-save ──
 
