@@ -166,40 +166,42 @@ export default function PortServicesSection({
             <div className="text-xs font-bold text-[#444] uppercase tracking-wide">
               Tugs
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[11px] text-[#666] mb-1 font-medium">Diesel</label>
-                <input
-                  type="number"
-                  min={0}
-                  value={baseline.tugs_diesel || ''}
-                  onChange={(e) => onBaselineChange({ ...baseline, tugs_diesel: parseInt(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm text-[#414141] bg-white focus:border-[#3c5e86] focus:ring-1 focus:ring-[#3c5e86] focus:outline-none"
-                  placeholder="0"
-                />
+            <div className="flex items-end gap-3">
+              <div className="grid grid-cols-2 gap-3 flex-1">
+                <div>
+                  <label className="block text-[11px] text-[#666] mb-1 font-medium">Diesel</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={baseline.tugs_diesel || ''}
+                    onChange={(e) => onBaselineChange({ ...baseline, tugs_diesel: parseInt(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm text-[#414141] bg-white focus:border-[#3c5e86] focus:ring-1 focus:ring-[#3c5e86] focus:outline-none"
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-[#666] mb-1 font-medium">Electric</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={baseline.tugs_electric || ''}
+                    onChange={(e) => onBaselineChange({ ...baseline, tugs_electric: parseInt(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm text-[#414141] bg-white focus:border-[#3c5e86] focus:ring-1 focus:ring-[#3c5e86] focus:outline-none"
+                    placeholder="0"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-[11px] text-[#666] mb-1 font-medium">Electric</label>
-                <input
-                  type="number"
-                  min={0}
-                  value={baseline.tugs_electric || ''}
-                  onChange={(e) => onBaselineChange({ ...baseline, tugs_electric: parseInt(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm text-[#414141] bg-white focus:border-[#3c5e86] focus:ring-1 focus:ring-[#3c5e86] focus:outline-none"
-                  placeholder="0"
-                />
+              <div className="shrink-0">
+                <label className="block text-[10px] font-semibold uppercase text-[#7c6fb0] mb-1">Owner</label>
+                <select
+                  value={baseline.tugs_ownership ?? 'port'}
+                  onChange={(e) => onBaselineChange({ ...baseline, tugs_ownership: e.target.value as OwnershipType })}
+                  className="w-21 px-2 py-2 rounded-lg border border-[#d5d2e0] text-[11px] text-[#555] bg-[#f8f6fb] hover:border-[#8b82b0] focus:border-[#8b82b0] focus:outline-none cursor-pointer"
+                >
+                  <option value="port">Port</option>
+                  <option value="third_party">3rd Party</option>
+                </select>
               </div>
-            </div>
-            <div>
-              <label className="block text-[11px] text-[#666] mb-1 font-medium">Ownership</label>
-              <select
-                value={baseline.tugs_ownership ?? 'port'}
-                onChange={(e) => onBaselineChange({ ...baseline, tugs_ownership: e.target.value as OwnershipType })}
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm text-[#414141] bg-white focus:border-[#3c5e86] focus:ring-1 focus:ring-[#3c5e86] focus:outline-none"
-              >
-                <option value="port">Port-owned</option>
-                <option value="third_party">Third-party</option>
-              </select>
             </div>
             <div>
               <div className="flex items-center justify-between mb-1">
@@ -230,40 +232,42 @@ export default function PortServicesSection({
             <div className="text-xs font-bold text-[#444] uppercase tracking-wide">
               Pilot Boats
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[11px] text-[#666] mb-1 font-medium">Diesel</label>
-                <input
-                  type="number"
-                  min={0}
-                  value={baseline.pilot_boats_diesel || ''}
-                  onChange={(e) => onBaselineChange({ ...baseline, pilot_boats_diesel: parseInt(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm text-[#414141] bg-white focus:border-[#3c5e86] focus:ring-1 focus:ring-[#3c5e86] focus:outline-none"
-                  placeholder="0"
-                />
+            <div className="flex items-end gap-3">
+              <div className="grid grid-cols-2 gap-3 flex-1">
+                <div>
+                  <label className="block text-[11px] text-[#666] mb-1 font-medium">Diesel</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={baseline.pilot_boats_diesel || ''}
+                    onChange={(e) => onBaselineChange({ ...baseline, pilot_boats_diesel: parseInt(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm text-[#414141] bg-white focus:border-[#3c5e86] focus:ring-1 focus:ring-[#3c5e86] focus:outline-none"
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-[#666] mb-1 font-medium">Electric</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={baseline.pilot_boats_electric || ''}
+                    onChange={(e) => onBaselineChange({ ...baseline, pilot_boats_electric: parseInt(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm text-[#414141] bg-white focus:border-[#3c5e86] focus:ring-1 focus:ring-[#3c5e86] focus:outline-none"
+                    placeholder="0"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-[11px] text-[#666] mb-1 font-medium">Electric</label>
-                <input
-                  type="number"
-                  min={0}
-                  value={baseline.pilot_boats_electric || ''}
-                  onChange={(e) => onBaselineChange({ ...baseline, pilot_boats_electric: parseInt(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm text-[#414141] bg-white focus:border-[#3c5e86] focus:ring-1 focus:ring-[#3c5e86] focus:outline-none"
-                  placeholder="0"
-                />
+              <div className="shrink-0">
+                <label className="block text-[10px] font-semibold uppercase text-[#7c6fb0] mb-1">Owner</label>
+                <select
+                  value={baseline.pilot_boats_ownership ?? 'port'}
+                  onChange={(e) => onBaselineChange({ ...baseline, pilot_boats_ownership: e.target.value as OwnershipType })}
+                  className="w-21 px-2 py-2 rounded-lg border border-[#d5d2e0] text-[11px] text-[#555] bg-[#f8f6fb] hover:border-[#8b82b0] focus:border-[#8b82b0] focus:outline-none cursor-pointer"
+                >
+                  <option value="port">Port</option>
+                  <option value="third_party">3rd Party</option>
+                </select>
               </div>
-            </div>
-            <div>
-              <label className="block text-[11px] text-[#666] mb-1 font-medium">Ownership</label>
-              <select
-                value={baseline.pilot_boats_ownership ?? 'port'}
-                onChange={(e) => onBaselineChange({ ...baseline, pilot_boats_ownership: e.target.value as OwnershipType })}
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm text-[#414141] bg-white focus:border-[#3c5e86] focus:ring-1 focus:ring-[#3c5e86] focus:outline-none"
-              >
-                <option value="port">Port-owned</option>
-                <option value="third_party">Third-party</option>
-              </select>
             </div>
             <div>
               <div className="flex items-center justify-between mb-1">
@@ -304,7 +308,7 @@ export default function PortServicesSection({
                 Baseline: {baseline.tugs_diesel} diesel + {baseline.tugs_electric} electric
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-3">
               <div>
                 <label className="block text-[11px] text-[#bf360c] mb-1 font-semibold">Convert to Electric</label>
                 <input
@@ -337,17 +341,17 @@ export default function PortServicesSection({
                   <span className="text-[#0d47a1] font-bold">{scenarioTugsElectric} electric</span>
                 </div>
               </div>
-            </div>
-            <div>
-              <label className="block text-[11px] text-[#666] mb-1 font-medium">Ownership</label>
-              <select
-                value={baseline.tugs_ownership ?? 'port'}
-                onChange={(e) => onBaselineChange({ ...baseline, tugs_ownership: e.target.value as OwnershipType })}
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm text-[#414141] bg-white focus:border-[#3c5e86] focus:ring-1 focus:ring-[#3c5e86] focus:outline-none"
-              >
-                <option value="port">Port-owned</option>
-                <option value="third_party">Third-party</option>
-              </select>
+              <div>
+                <label className="block text-[10px] font-semibold uppercase text-[#7c6fb0] mb-1">Owner</label>
+                <select
+                  value={baseline.tugs_ownership ?? 'port'}
+                  onChange={(e) => onBaselineChange({ ...baseline, tugs_ownership: e.target.value as OwnershipType })}
+                  className="w-21 px-2 py-2 rounded-lg border border-[#d5d2e0] text-[11px] text-[#555] bg-[#f8f6fb] hover:border-[#8b82b0] focus:border-[#8b82b0] focus:outline-none cursor-pointer"
+                >
+                  <option value="port">Port</option>
+                  <option value="third_party">3rd Party</option>
+                </select>
+              </div>
             </div>
           </div>
 
@@ -361,7 +365,7 @@ export default function PortServicesSection({
                 Baseline: {baseline.pilot_boats_diesel} diesel + {baseline.pilot_boats_electric} electric
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-3">
               <div>
                 <label className="block text-[11px] text-[#bf360c] mb-1 font-semibold">Convert to Electric</label>
                 <input
@@ -394,17 +398,17 @@ export default function PortServicesSection({
                   <span className="text-[#0d47a1] font-bold">{scenarioPilotElectric} electric</span>
                 </div>
               </div>
-            </div>
-            <div>
-              <label className="block text-[11px] text-[#666] mb-1 font-medium">Ownership</label>
-              <select
-                value={baseline.pilot_boats_ownership ?? 'port'}
-                onChange={(e) => onBaselineChange({ ...baseline, pilot_boats_ownership: e.target.value as OwnershipType })}
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm text-[#414141] bg-white focus:border-[#3c5e86] focus:ring-1 focus:ring-[#3c5e86] focus:outline-none"
-              >
-                <option value="port">Port-owned</option>
-                <option value="third_party">Third-party</option>
-              </select>
+              <div>
+                <label className="block text-[10px] font-semibold uppercase text-[#7c6fb0] mb-1">Owner</label>
+                <select
+                  value={baseline.pilot_boats_ownership ?? 'port'}
+                  onChange={(e) => onBaselineChange({ ...baseline, pilot_boats_ownership: e.target.value as OwnershipType })}
+                  className="w-21 px-2 py-2 rounded-lg border border-[#d5d2e0] text-[11px] text-[#555] bg-[#f8f6fb] hover:border-[#8b82b0] focus:border-[#8b82b0] focus:outline-none cursor-pointer"
+                >
+                  <option value="port">Port</option>
+                  <option value="third_party">3rd Party</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>

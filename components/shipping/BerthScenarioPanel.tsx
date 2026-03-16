@@ -157,9 +157,9 @@ export default function BerthScenarioPanel({ berths, scenarios, onChange, onBert
                 DC
               </th>
               <th className="text-center py-3 px-3 text-[11px] font-bold uppercase text-[#666] w-14">Status</th>
-              <th className="text-center py-3 px-3 text-[11px] font-bold uppercase bg-[#f0eef5] text-[#555] w-24">
+              <th className="text-center py-3 px-3 text-[10px] font-bold uppercase bg-[#f0eef5] text-[#7c6fb0] w-28">
                 Owner
-                <span className="block text-[9px] font-normal text-[#888]">(OPS / DC)</span>
+                <span className="block text-[9px] font-normal text-[#9b91c0]">(OPS / DC)</span>
               </th>
             </tr>
           </thead>
@@ -256,34 +256,34 @@ export default function BerthScenarioPanel({ berths, scenarios, onChange, onBert
                   </td>
 
                   {/* Ownership (OPS / DC) */}
-                  <td className="py-2 px-3 text-center bg-[#f8f6fb]">
-                    <div className="flex items-center justify-center gap-1">
+                  <td className="py-2 px-2 text-center bg-[#faf9fc]">
+                    <div className="flex items-center justify-center gap-1.5">
                       {hasOps ? (
                         <select
                           value={berth.ops_ownership ?? 'port'}
                           onChange={(e) => updateBerthOwnership(berth.id, 'ops_ownership', e.target.value as OwnershipType)}
-                          className="text-[10px] px-1 py-0.5 rounded border border-gray-200 bg-white text-[#333] focus:outline-none focus:border-[#3c5e86] w-[52px]"
+                          className="w-16 px-1.5 py-1 rounded border border-[#d5d2e0] text-[11px] text-[#555] bg-[#f8f6fb] hover:border-[#8b82b0] focus:border-[#8b82b0] focus:outline-none cursor-pointer"
                           title="OPS ownership"
                         >
                           <option value="port">Port</option>
-                          <option value="third_party">3rd</option>
+                          <option value="third_party">3rd P.</option>
                         </select>
                       ) : (
-                        <span className="text-[10px] text-[#ccc] w-[52px]">—</span>
+                        <span className="w-16 text-center text-[11px] text-[#d5d2e0]">—</span>
                       )}
-                      <span className="text-[#ccc] text-[9px]">/</span>
+                      <span className="text-[#d5d2e0] text-[9px] font-medium">/</span>
                       {berth.dc_existing || scenario.dc_enabled ? (
                         <select
                           value={berth.dc_ownership ?? 'port'}
                           onChange={(e) => updateBerthOwnership(berth.id, 'dc_ownership', e.target.value as OwnershipType)}
-                          className="text-[10px] px-1 py-0.5 rounded border border-gray-200 bg-white text-[#333] focus:outline-none focus:border-[#3c5e86] w-[52px]"
+                          className="w-16 px-1.5 py-1 rounded border border-[#d5d2e0] text-[11px] text-[#555] bg-[#f8f6fb] hover:border-[#8b82b0] focus:border-[#8b82b0] focus:outline-none cursor-pointer"
                           title="DC ownership"
                         >
                           <option value="port">Port</option>
-                          <option value="third_party">3rd</option>
+                          <option value="third_party">3rd P.</option>
                         </select>
                       ) : (
-                        <span className="text-[10px] text-[#ccc] w-[52px]">—</span>
+                        <span className="w-16 text-center text-[11px] text-[#d5d2e0]">—</span>
                       )}
                     </div>
                   </td>
@@ -319,7 +319,7 @@ export default function BerthScenarioPanel({ berths, scenarios, onChange, onBert
                 {dcExistingCount > 0 && dcNewCount > 0 && ' + '}
                 {dcNewCount > 0 && <span className="text-[#bf360c] font-semibold">{dcNewCount} new</span>}
               </td>
-              <td className="py-3 px-3 bg-[#f8f6fb]"></td>
+              <td className="py-3 px-3 bg-[#faf9fc]"></td>
             </tr>
           </tfoot>
         </table>

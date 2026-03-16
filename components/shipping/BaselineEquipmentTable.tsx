@@ -203,18 +203,18 @@ function EquipmentRow({
         </td>
 
         {/* Owner column */}
-        <td className="py-2 px-2">
+        <td className="py-2 px-3 text-center bg-[#faf9fc]">
           {totalQty > 0 ? (
               <select
                 value={ownerMode}
                 onChange={(e) => handleOwnerModeChange(e.target.value as OwnerMode)}
-                className="w-full px-1 py-1 rounded border border-gray-300 text-[11px] text-[#414141] bg-white focus:border-[#3c5e86] focus:outline-none"
+                className="w-21 px-2 py-1 rounded border border-[#d5d2e0] text-[11px] text-[#555] bg-[#f8f6fb] hover:border-[#8b82b0] focus:border-[#8b82b0] focus:outline-none cursor-pointer"
               >
                 <option value="port">Port</option>
                 <option value="third_party">3rd Party</option>
               </select>
           ) : (
-            <div className="text-center text-xs text-[#bbb]">—</div>
+            <div className="text-[11px] text-[#ccc]">—</div>
           )}
         </td>
       </tr>
@@ -529,7 +529,7 @@ export default function BaselineEquipmentTable({
             <th className="text-center py-3 px-3 text-[11px] font-bold uppercase bg-[#eee] text-[#444] w-[10%]">
               Total
             </th>
-            <th className="text-center py-3 px-3 text-[11px] font-bold uppercase bg-[#f0eef5] text-[#555] w-[15%]">
+            <th className="text-center py-3 px-3 text-[10px] font-bold uppercase bg-[#f0eef5] text-[#7c6fb0] w-[12%]">
               Owner
             </th>
           </tr>
@@ -565,7 +565,7 @@ export default function BaselineEquipmentTable({
             <td className="py-3 px-3 text-center text-sm font-bold text-[#333]">
               {totalDiesel + totalElectric}
             </td>
-            <td className="py-3 px-3" />
+            <td className="py-3 px-3 bg-[#faf9fc]" />
           </tr>
         </tfoot>
       </table>

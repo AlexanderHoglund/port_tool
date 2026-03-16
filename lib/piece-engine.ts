@@ -1079,7 +1079,7 @@ export function calculateTerminalPiece(
     // Scenario: conversions inherit baseline ownership, additions have their own
     const scenEntry = terminal.scenario_equipment[key] ?? { num_to_convert: 0, num_to_add: 0 }
     const converted = Math.min(scenEntry.num_to_convert, entry.existing_diesel)
-    const addFrac = (scenEntry.add_ownership ?? 'port') === 'port' ? 1 : 0
+    const addFrac = (scenEntry.add_ownership ?? entry.ownership ?? 'port') === 'port' ? 1 : 0
 
     // Remaining diesel keeps baseline ownership
     const remainingDiesel = entry.existing_diesel - converted
