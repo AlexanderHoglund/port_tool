@@ -69,6 +69,8 @@ export function reconstitutePieceTerminals(
       max_vessel_segment_key: bb.max_vessel_segment_key,
       ops_existing: bb.ops_existing,
       dc_existing: bb.dc_existing,
+      ops_ownership: bb.ops_ownership,
+      dc_ownership: bb.dc_ownership,
     }))
 
     // Vessel calls: prefer baseline, fall back to old scenario vessel_calls_by_berth
@@ -93,6 +95,7 @@ export function reconstitutePieceTerminals(
       scenario_equipment: st?.scenario_equipment ?? {},
       berth_scenarios: st?.berth_scenarios ?? [],
       charger_overrides: st?.charger_overrides,
+      charger_ownership: st?.charger_ownership,
     }
   })
 
@@ -131,6 +134,7 @@ export function decomposePieceTerminals(
       scenario_equipment: t.scenario_equipment,
       berth_scenarios: t.berth_scenarios,
       charger_overrides: t.charger_overrides,
+      charger_ownership: t.charger_ownership,
     })
   }
 

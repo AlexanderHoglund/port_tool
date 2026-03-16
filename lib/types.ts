@@ -11,6 +11,23 @@ export type PortConfig = {
 // ── PIECE Terminal Types ─────────────────────────────────────
 export type TerminalType = 'container' | 'cruise' | 'roro'
 
+/** Equipment ownership: port-owned vs third-party */
+export type OwnershipType = 'port' | 'third_party'
+
+/** Ownership split for result aggregation */
+export type OwnershipSplit = {
+  port_owned: number
+  third_party: number
+}
+
+/** Scoped emissions following GHG Protocol */
+export type ScopedEmissions = {
+  scope_1_tons: number  // Port-owned diesel (direct combustion)
+  scope_2_tons: number  // Port-owned electricity (purchased energy)
+  scope_3_tons: number  // Third-party equipment (all fuel types)
+  total_tons: number
+}
+
 // ═══════════════════════════════════════════════════════════
 // BASELINE TYPES (Section 1) — Define Current Port State
 // ═══════════════════════════════════════════════════════════
@@ -19,6 +36,7 @@ export type TerminalType = 'container' | 'cruise' | 'roro'
 export type BaselineEquipmentEntry = {
   existing_diesel: number    // e.g., 5 diesel terminal tractors
   existing_electric: number  // e.g., 2 already electric tractors
+  ownership?: OwnershipType  // All units port-owned or third-party (default: 'port')
 }
 
 /** Vessel call entry — defines a vessel type's annual call frequency and berth time */
@@ -37,6 +55,8 @@ export type BerthDefinition = {
   max_vessel_segment_key: string       // Design capacity — largest vessel the berth can handle (drives CAPEX, cable sizing)
   ops_existing: boolean        // Does this berth already have OPS infrastructure?
   dc_existing: boolean         // Does this berth already have DC charging infrastructure?
+  ops_ownership?: OwnershipType  // OPS infrastructure ownership (default: 'port')
+  dc_ownership?: OwnershipType   // DC infrastructure ownership (default: 'port')
 }
 
 /** Buildings & lighting configuration — annual energy consumption */
@@ -54,6 +74,8 @@ export type PortServicesBaseline = {
   pilot_boats_electric: number
   tug_avg_hours_per_call?: number      // Avg tug operation hours per vessel call (default 4)
   pilot_avg_hours_per_call?: number    // Avg pilot operation hours per vessel call (default 4)
+  tugs_ownership?: OwnershipType         // Tug fleet ownership (default: 'port')
+  pilot_boats_ownership?: OwnershipType  // Pilot boat fleet ownership (default: 'port')
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -64,6 +86,7 @@ export type PortServicesBaseline = {
 export type ScenarioEquipmentEntry = {
   num_to_convert: number  // Convert X diesel → electric
   num_to_add: number      // Add X new electric units
+  add_ownership?: OwnershipType  // Ownership of new additions (default: 'port')
 }
 
 /** Berth scenario config: OPS/DC toggles for each berth */
@@ -175,6 +198,7 @@ export type PieceTerminalConfig = {
 
   // Charger overrides (auto-calculated from equipment, but can be manually adjusted)
   charger_overrides?: Record<string, number>
+  charger_ownership?: Record<string, OwnershipType>  // Per-charger-type ownership (default: 'port')
 
   // Grid infrastructure
   cable_length_m?: number         // Total cable run in meters
@@ -235,6 +259,7 @@ export type ScenarioTerminalConfig = {
   scenario_equipment: Record<string, ScenarioEquipmentEntry>
   berth_scenarios: BerthScenarioConfig[]
   charger_overrides?: Record<string, number>
+  charger_ownership?: Record<string, OwnershipType>
 }
 
 /** Scenario-level data blob (stored as JSONB in piece_scenarios.scenario_config) */
@@ -621,6 +646,8 @@ export type PieceEquipmentLineItem = {
   unit_capex_usd: number
   total_capex_usd: number
   lifespan_years: number
+  // Ownership
+  port_fraction: number  // 0-1, fraction of units that are port-owned
 }
 
 export type PieceChargerLineItem = {
@@ -638,6 +665,8 @@ export type PieceChargerLineItem = {
   total_capex_usd: number
   annual_opex_usd: number
   total_annual_opex_usd: number
+  // Ownership
+  port_fraction: number  // 0-1, fraction port-owned (inherits from equipment)
 }
 
 export type PieceBerthVesselCallLineItem = {
@@ -687,6 +716,9 @@ export type PieceBerthLineItem = {
   scenario_co2_tons: number
   scenario_fuel_cost_usd: number
   scenario_energy_cost_usd: number
+  // Ownership
+  ops_ownership: OwnershipType
+  dc_ownership: OwnershipType
 }
 
 export type PieceGridResult = {
@@ -752,6 +784,9 @@ export type PiecePortServicesResult = {
   tug_ops_capex_usd: number
   pilot_ops_capex_usd: number
   total_ops_capex_usd: number
+  // Ownership
+  tugs_ownership: OwnershipType
+  pilot_boats_ownership: OwnershipType
 }
 
 export type PieceTerminalResult = {
@@ -815,6 +850,13 @@ export type PieceTerminalResult = {
   total_capex_usd: number
   annual_opex_savings_usd: number
   annual_co2_savings_tons: number
+
+  // Ownership & scope splits
+  ownership_capex: OwnershipSplit
+  ownership_opex_baseline: OwnershipSplit
+  ownership_opex_scenario: OwnershipSplit
+  baseline_scoped_emissions: ScopedEmissions
+  scenario_scoped_emissions: ScopedEmissions
 }
 
 export type PiecePortResult = {
@@ -849,6 +891,13 @@ export type PiecePortResult = {
     co2_reduction_percent: number
     annual_opex_savings_usd: number
     simple_payback_years: number | null
+
+    // Ownership & scope splits
+    ownership_capex: OwnershipSplit
+    ownership_opex_baseline: OwnershipSplit
+    ownership_opex_scenario: OwnershipSplit
+    baseline_emissions: ScopedEmissions
+    scenario_emissions: ScopedEmissions
   }
   economic_assumptions_used: Record<string, number>
 }

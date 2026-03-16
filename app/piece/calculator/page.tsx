@@ -27,6 +27,7 @@ import SaveStatusIndicator from '@/components/shipping/SaveStatusIndicator'
 import { usePieceContext, createDefaultTerminal } from '../context/PieceContext'
 import {
   createScenario,
+  deleteScenario,
   updateProjectBaseline,
   updateScenario,
   listScenarios,
@@ -52,7 +53,7 @@ export default function CalculatorPage() {
     result, setResult,
     portServicesBaseline, setPortServicesBaseline,
     portServicesScenario, setPortServicesScenario,
-    activeProjectId, activeProjectName,
+    activeProjectId, activeProjectName, setActiveProject,
     activeScenarioId, activeScenarioName,
     activeAssumptionProfile,
     loadProjectScenario,
@@ -577,6 +578,26 @@ export default function CalculatorPage() {
     }
   }, [refreshScenarioList])
 
+  const handleDeleteScenario = useCallback(async (scenarioId: string) => {
+    if (!activeProjectId) return
+    try {
+      await deleteScenario(scenarioId)
+      const updatedList = await listScenarios(activeProjectId)
+      // If we deleted the active scenario, switch to the first remaining one
+      if (scenarioId === activeScenarioId && updatedList.length > 0) {
+        const nextId = updatedList[0].id
+        const projectRow = await loadProjectRow(activeProjectId)
+        const scenarioRow = await loadScenarioRow(nextId)
+        skipTabSwitchRef.current = true
+        loadProjectScenario(projectRow, scenarioRow)
+        dirtyRef.current = false
+      }
+      await refreshScenarioList()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete scenario')
+    }
+  }, [activeProjectId, activeScenarioId, loadProjectScenario, refreshScenarioList])
+
   // ── Calculate ──
   const handleCalculate = async () => {
     setLoading(true)
@@ -689,7 +710,17 @@ export default function CalculatorPage() {
             <div className="flex items-center gap-4 text-sm">
               <div className="flex items-center gap-1.5">
                 <span className="text-[#8c8c8c] text-xs font-medium">Project:</span>
-                <span className="text-[#414141] font-semibold">{activeProjectName}</span>
+                <input
+                  type="text"
+                  value={activeProjectName ?? ''}
+                  onChange={(e) => setActiveProject(activeProjectId, e.target.value)}
+                  onBlur={async () => {
+                    if (activeProjectId && activeProjectName) {
+                      await updateProjectBaseline(activeProjectId, { project_name: activeProjectName })
+                    }
+                  }}
+                  className="text-sm font-semibold text-[#414141] bg-transparent border-b border-transparent hover:border-gray-300 focus:border-[#3c5e86] focus:outline-none py-0.5 w-48 transition-colors"
+                />
               </div>
               {activeScenarioName && (
                 <>
@@ -760,16 +791,28 @@ export default function CalculatorPage() {
                 </div>
 
                 {scenarioList.length > 0 && !isBaselineEditing ? (
-                  /* Read-only port info summary */
+                  /* Editable port name & location */
                   <div className="bg-white rounded-xl border border-gray-100 p-6">
                     <div className="grid grid-cols-2 gap-6">
                       <div>
                         <div className="text-[10px] font-bold uppercase tracking-widest text-[#8c8c8c] mb-1">Port Name</div>
-                        <div className="text-sm font-semibold text-[#414141]">{port.name || 'Unnamed Port'}</div>
+                        <input
+                          type="text"
+                          value={port.name}
+                          onChange={(e) => setPort({ ...port, name: e.target.value })}
+                          placeholder="Enter port name"
+                          className="text-sm font-semibold text-[#414141] bg-transparent border-b border-transparent hover:border-gray-300 focus:border-[#3c5e86] focus:outline-none w-full py-0.5 transition-colors"
+                        />
                       </div>
                       <div>
                         <div className="text-[10px] font-bold uppercase tracking-widest text-[#8c8c8c] mb-1">Location</div>
-                        <div className="text-sm text-[#414141]">{port.location || '-'}</div>
+                        <input
+                          type="text"
+                          value={port.location}
+                          onChange={(e) => setPort({ ...port, location: e.target.value })}
+                          placeholder="Enter location"
+                          className="text-sm text-[#414141] bg-transparent border-b border-transparent hover:border-gray-300 focus:border-[#3c5e86] focus:outline-none w-full py-0.5 transition-colors"
+                        />
                       </div>
                     </div>
                   </div>
@@ -912,6 +955,7 @@ export default function CalculatorPage() {
                 onSelectScenario={handleSwitchScenario}
                 onCreateScenario={handleCreateNewScenario}
                 onRenameScenario={handleRenameScenario}
+                onDeleteScenario={handleDeleteScenario}
                 disabled={loading}
               />
 

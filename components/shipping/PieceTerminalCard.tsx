@@ -363,6 +363,7 @@ export default function PieceTerminalCard({
                   scenarios={terminal.berth_scenarios ?? []}
                   terminalType={terminal.terminal_type}
                   onChange={(scenarios) => onChange({ ...terminal, berth_scenarios: scenarios })}
+                  onBerthChange={(berths) => onChange({ ...terminal, berths })}
                 />
               </CollapsibleSection>
 
@@ -404,8 +405,12 @@ export default function PieceTerminalCard({
                   <ChargerPanel
                     scenarioEquipment={scenarioElectricEquipment}
                     chargerOverrides={terminal.charger_overrides}
+                    chargerOwnership={terminal.charger_ownership}
                     onChange={(overrides) =>
                       onChange({ ...terminal, charger_overrides: overrides })
+                    }
+                    onOwnershipChange={(ownership) =>
+                      onChange({ ...terminal, charger_ownership: ownership })
                     }
                   />
                 </CollapsibleSection>

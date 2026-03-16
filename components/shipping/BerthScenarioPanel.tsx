@@ -1,12 +1,13 @@
 'use client'
 
-import type { BerthDefinition, BerthScenarioConfig, TerminalType } from '@/lib/types'
+import type { BerthDefinition, BerthScenarioConfig, TerminalType, OwnershipType } from '@/lib/types'
 
 type Props = {
   berths: BerthDefinition[]
   scenarios: BerthScenarioConfig[]
   terminalType: TerminalType
   onChange: (scenarios: BerthScenarioConfig[]) => void
+  onBerthChange?: (berths: BerthDefinition[]) => void
 }
 
 // OPS power and CAPEX by vessel segment
@@ -44,7 +45,7 @@ const SEGMENT_NAMES: Record<string, string> = {
   roro_7k_plus: '7K+ CEU',
 }
 
-export default function BerthScenarioPanel({ berths, scenarios, onChange }: Props) {
+export default function BerthScenarioPanel({ berths, scenarios, onChange, onBerthChange }: Props) {
   // Ensure all berths have scenario configs
   const getScenario = (berthId: string): BerthScenarioConfig => {
     const existing = scenarios.find((s) => s.berth_id === berthId)
@@ -59,6 +60,11 @@ export default function BerthScenarioPanel({ berths, scenarios, onChange }: Prop
     } else {
       onChange([...scenarios, { berth_id: berthId, ops_enabled: false, dc_enabled: false, ...updates }])
     }
+  }
+
+  function updateBerthOwnership(berthId: string, field: 'ops_ownership' | 'dc_ownership', value: OwnershipType) {
+    if (!onBerthChange) return
+    onBerthChange(berths.map((b) => b.id === berthId ? { ...b, [field]: value } : b))
   }
 
   // Calculate totals
@@ -151,6 +157,10 @@ export default function BerthScenarioPanel({ berths, scenarios, onChange }: Prop
                 DC
               </th>
               <th className="text-center py-3 px-3 text-[11px] font-bold uppercase text-[#666] w-14">Status</th>
+              <th className="text-center py-3 px-3 text-[11px] font-bold uppercase bg-[#f0eef5] text-[#555] w-24">
+                Owner
+                <span className="block text-[9px] font-normal text-[#888]">(OPS / DC)</span>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -245,6 +255,39 @@ export default function BerthScenarioPanel({ berths, scenarios, onChange }: Prop
                     )}
                   </td>
 
+                  {/* Ownership (OPS / DC) */}
+                  <td className="py-2 px-3 text-center bg-[#f8f6fb]">
+                    <div className="flex items-center justify-center gap-1">
+                      {hasOps ? (
+                        <select
+                          value={berth.ops_ownership ?? 'port'}
+                          onChange={(e) => updateBerthOwnership(berth.id, 'ops_ownership', e.target.value as OwnershipType)}
+                          className="text-[10px] px-1 py-0.5 rounded border border-gray-200 bg-white text-[#333] focus:outline-none focus:border-[#3c5e86] w-[52px]"
+                          title="OPS ownership"
+                        >
+                          <option value="port">Port</option>
+                          <option value="third_party">3rd</option>
+                        </select>
+                      ) : (
+                        <span className="text-[10px] text-[#ccc] w-[52px]">—</span>
+                      )}
+                      <span className="text-[#ccc] text-[9px]">/</span>
+                      {berth.dc_existing || scenario.dc_enabled ? (
+                        <select
+                          value={berth.dc_ownership ?? 'port'}
+                          onChange={(e) => updateBerthOwnership(berth.id, 'dc_ownership', e.target.value as OwnershipType)}
+                          className="text-[10px] px-1 py-0.5 rounded border border-gray-200 bg-white text-[#333] focus:outline-none focus:border-[#3c5e86] w-[52px]"
+                          title="DC ownership"
+                        >
+                          <option value="port">Port</option>
+                          <option value="third_party">3rd</option>
+                        </select>
+                      ) : (
+                        <span className="text-[10px] text-[#ccc] w-[52px]">—</span>
+                      )}
+                    </div>
+                  </td>
+
                 </tr>
               )
             })}
@@ -276,6 +319,7 @@ export default function BerthScenarioPanel({ berths, scenarios, onChange }: Prop
                 {dcExistingCount > 0 && dcNewCount > 0 && ' + '}
                 {dcNewCount > 0 && <span className="text-[#bf360c] font-semibold">{dcNewCount} new</span>}
               </td>
+              <td className="py-3 px-3 bg-[#f8f6fb]"></td>
             </tr>
           </tfoot>
         </table>

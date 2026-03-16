@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import type { PortServicesBaseline, PortServicesScenario } from '@/lib/types'
+import type { PortServicesBaseline, PortServicesScenario, OwnershipType } from '@/lib/types'
 import { createClient } from '@/utils/supabase/client'
 import { usePieceContext } from '@/app/piece/context/PieceContext'
 
@@ -191,6 +191,17 @@ export default function PortServicesSection({
               </div>
             </div>
             <div>
+              <label className="block text-[11px] text-[#666] mb-1 font-medium">Ownership</label>
+              <select
+                value={baseline.tugs_ownership ?? 'port'}
+                onChange={(e) => onBaselineChange({ ...baseline, tugs_ownership: e.target.value as OwnershipType })}
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm text-[#414141] bg-white focus:border-[#3c5e86] focus:ring-1 focus:ring-[#3c5e86] focus:outline-none"
+              >
+                <option value="port">Port-owned</option>
+                <option value="third_party">Third-party</option>
+              </select>
+            </div>
+            <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-[11px] text-[#666] font-medium">Avg Hours per Call</label>
                 {tugHasOverride && (
@@ -242,6 +253,17 @@ export default function PortServicesSection({
                   placeholder="0"
                 />
               </div>
+            </div>
+            <div>
+              <label className="block text-[11px] text-[#666] mb-1 font-medium">Ownership</label>
+              <select
+                value={baseline.pilot_boats_ownership ?? 'port'}
+                onChange={(e) => onBaselineChange({ ...baseline, pilot_boats_ownership: e.target.value as OwnershipType })}
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm text-[#414141] bg-white focus:border-[#3c5e86] focus:ring-1 focus:ring-[#3c5e86] focus:outline-none"
+              >
+                <option value="port">Port-owned</option>
+                <option value="third_party">Third-party</option>
+              </select>
             </div>
             <div>
               <div className="flex items-center justify-between mb-1">
@@ -316,6 +338,17 @@ export default function PortServicesSection({
                 </div>
               </div>
             </div>
+            <div>
+              <label className="block text-[11px] text-[#666] mb-1 font-medium">Ownership</label>
+              <select
+                value={baseline.tugs_ownership ?? 'port'}
+                onChange={(e) => onBaselineChange({ ...baseline, tugs_ownership: e.target.value as OwnershipType })}
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm text-[#414141] bg-white focus:border-[#3c5e86] focus:ring-1 focus:ring-[#3c5e86] focus:outline-none"
+              >
+                <option value="port">Port-owned</option>
+                <option value="third_party">Third-party</option>
+              </select>
+            </div>
           </div>
 
           {/* Pilot Boats */}
@@ -361,6 +394,17 @@ export default function PortServicesSection({
                   <span className="text-[#0d47a1] font-bold">{scenarioPilotElectric} electric</span>
                 </div>
               </div>
+            </div>
+            <div>
+              <label className="block text-[11px] text-[#666] mb-1 font-medium">Ownership</label>
+              <select
+                value={baseline.pilot_boats_ownership ?? 'port'}
+                onChange={(e) => onBaselineChange({ ...baseline, pilot_boats_ownership: e.target.value as OwnershipType })}
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm text-[#414141] bg-white focus:border-[#3c5e86] focus:ring-1 focus:ring-[#3c5e86] focus:outline-none"
+              >
+                <option value="port">Port-owned</option>
+                <option value="third_party">Third-party</option>
+              </select>
             </div>
           </div>
         </div>

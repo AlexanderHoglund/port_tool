@@ -257,6 +257,21 @@ function EquipmentRow({
             onChange={(e) => onChange({ ...scenarioEntry, num_to_add: parseQty(e.target.value) })}
             className="w-full px-2 py-1.5 rounded border border-[#b4d9b6] text-sm text-center text-[#414141] bg-white focus:border-[#4caf50] focus:outline-none"
           />
+          {toAdd > 0 && (
+            <div className="mt-1">
+              <select
+                value={scenarioEntry.add_ownership ?? 'port'}
+                onChange={(e) => {
+                  const mode = e.target.value as 'port' | 'third_party'
+                  onChange({ ...scenarioEntry, add_ownership: mode === 'port' ? undefined : mode })
+                }}
+                className="w-full px-1 py-0.5 rounded border border-gray-300 text-[10px] text-[#555] bg-white focus:outline-none"
+              >
+                <option value="port">Port-owned</option>
+                <option value="third_party">3rd Party</option>
+              </select>
+            </div>
+          )}
         </td>
 
         {/* Resulting fleet - diesel */}

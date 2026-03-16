@@ -34,6 +34,9 @@ import type {
   ScenarioEquipmentEntry,
   PortServicesBaseline,
   PortServicesScenario,
+  OwnershipType,
+  OwnershipSplit,
+  ScopedEmissions,
 } from './types'
 
 // ═══════════════════════════════════════════════════════════
@@ -195,6 +198,54 @@ function buildEconomicMap(
 }
 
 // ═══════════════════════════════════════════════════════════
+// OWNERSHIP & SCOPE HELPERS
+// ═══════════════════════════════════════════════════════════
+
+/** Add multiple OwnershipSplit values */
+function addOwnershipSplits(...splits: OwnershipSplit[]): OwnershipSplit {
+  let port = 0, third = 0
+  for (const s of splits) { port += s.port_owned; third += s.third_party }
+  return { port_owned: port, third_party: third }
+}
+
+/** Add multiple ScopedEmissions values */
+function addScopedEmissions(...emissions: ScopedEmissions[]): ScopedEmissions {
+  let s1 = 0, s2 = 0, s3 = 0
+  for (const e of emissions) { s1 += e.scope_1_tons; s2 += e.scope_2_tons; s3 += e.scope_3_tons }
+  return { scope_1_tons: s1, scope_2_tons: s2, scope_3_tons: s3, total_tons: s1 + s2 + s3 }
+}
+
+/** Zero-valued ScopedEmissions */
+const ZERO_SCOPED: ScopedEmissions = { scope_1_tons: 0, scope_2_tons: 0, scope_3_tons: 0, total_tons: 0 }
+const ZERO_OWNERSHIP: OwnershipSplit = { port_owned: 0, third_party: 0 }
+
+/**
+ * Compute scoped emissions from equipment line items using per-key diesel/electric ownership fractions.
+ * - Scope 1: port-owned diesel combustion
+ * - Scope 2: port-owned electricity (purchased energy)
+ * - Scope 3: third-party equipment (all fuel types)
+ */
+function computeEquipmentScopedEmissions(
+  lineItems: PieceEquipmentLineItem[],
+  dieselPortFracs: Record<string, number>,
+  electricPortFracs: Record<string, number>,
+  dieselEfWtw: number,
+  gridEf: number,
+): ScopedEmissions {
+  let s1 = 0, s2 = 0, s3 = 0
+  for (const item of lineItems) {
+    const dieselCo2 = (item.annual_diesel_liters * dieselEfWtw) / 1000
+    const electricCo2 = (item.annual_kwh * gridEf) / 1000
+    const dpf = dieselPortFracs[item.equipment_key] ?? 1
+    const epf = electricPortFracs[item.equipment_key] ?? 1
+    s1 += dieselCo2 * dpf
+    s2 += electricCo2 * epf
+    s3 += dieselCo2 * (1 - dpf) + electricCo2 * (1 - epf)
+  }
+  return { scope_1_tons: s1, scope_2_tons: s2, scope_3_tons: s3, total_tons: s1 + s2 + s3 }
+}
+
+// ═══════════════════════════════════════════════════════════
 // EQUIPMENT CALCULATIONS (Throughput-Based)
 // ═══════════════════════════════════════════════════════════
 
@@ -231,6 +282,7 @@ export function calculateEquipmentPiece(
   annualTeu: number,
   pieceEquipment: PieceEquipmentRow[],
   economicMap: Record<string, number>,
+  portFractions?: Record<string, number>,
 ): {
   lineItems: PieceEquipmentLineItem[]
   totals: {
@@ -244,7 +296,7 @@ export function calculateEquipmentPiece(
   const dieselPrice = economicMap['diesel_price'] ?? 1.23
   const electricityPrice = economicMap['electricity_price'] ?? 0.12
   const dieselEfWtw = economicMap['diesel_ef_wtw'] ?? 3.28564 // kgCO2e/L WTW
-  const gridEf = economicMap['grid_ef'] ?? 0 // kgCO2/kWh (0 = 100% green)
+  const gridEf = economicMap['grid_ef'] ?? 0.4 // kgCO2/kWh (0 = 100% green)
   const maintenanceSaving = economicMap['maintenance_saving'] ?? 0.25
   const utilizationFactor = economicMap['utilization_factor'] ?? 0.85
   const teuPerMove = economicMap['teu_per_move'] ?? 1.7
@@ -340,6 +392,7 @@ export function calculateEquipmentPiece(
       unit_capex_usd: capexQty > 0 ? meta.capex_usd : 0,
       total_capex_usd: totalItemCapex,
       lifespan_years: meta.lifespan_years,
+      port_fraction: portFractions?.[equipmentKey] ?? 1,
     }
 
     lineItems.push(lineItem)
@@ -376,7 +429,9 @@ export function calculateEquipmentPiece(
 export function calculateChargers(
   equipmentCounts: Record<string, number>,
   evseData: PieceEvseRow[],
-  chargerOverrides?: Record<string, number>
+  chargerOverrides?: Record<string, number>,
+  equipmentPortFractions?: Record<string, number>,
+  chargerOwnership?: Record<string, 'port' | 'third_party'>,
 ): {
   lineItems: PieceChargerLineItem[]
   totals: {
@@ -421,6 +476,9 @@ export function calculateChargers(
       total_capex_usd: itemTotalCapex,
       annual_opex_usd: evse.annual_opex_usd,
       total_annual_opex_usd: itemTotalOpex,
+      port_fraction: chargerOwnership?.[evse.evse_key] !== undefined
+        ? (chargerOwnership[evse.evse_key] === 'port' ? 1 : 0)
+        : (equipmentPortFractions?.[evse.equipment_key] ?? 1),
     }
 
     lineItems.push(lineItem)
@@ -477,7 +535,7 @@ export function calculateBerthInfrastructure(
   }
 } {
   const electricityPrice = economicMap['electricity_price'] ?? 0.12
-  const gridEf = economicMap['grid_ef'] ?? 0 // kgCO2/kWh
+  const gridEf = economicMap['grid_ef'] ?? 0.4 // kgCO2/kWh
 
   // OPS emission factor: HFO CO2 per MWh of vessel auxiliary power at berth
   // Formula from DOCUMENTATION: MT_HFO_PER_MWH / ENGINE_EFF * HFO_WTW_EF
@@ -564,6 +622,8 @@ export function calculateBerthInfrastructure(
       scenario_co2_tons: 0,
       scenario_fuel_cost_usd: 0,
       scenario_energy_cost_usd: 0,
+      ops_ownership: berth.ops_ownership ?? 'port',
+      dc_ownership: berth.dc_ownership ?? 'port',
     }
 
     lineItems.push(lineItem)
@@ -803,7 +863,7 @@ export function calculatePortServices(
   const dieselPrice = economicMap['diesel_price'] ?? 1.23
   const electricityPrice = economicMap['electricity_price'] ?? 0.12
   const dieselEfWtw = economicMap['diesel_ef_wtw'] ?? 3.28564  // kgCO2e/L WTW
-  const gridEf = economicMap['grid_ef'] ?? 0  // kgCO2/kWh
+  const gridEf = economicMap['grid_ef'] ?? 0.4  // kgCO2/kWh
 
   // ── Step 1: Calculate tug/pilot demand from vessel calls across all terminals ──
   let totalTugTrips = 0
@@ -953,6 +1013,8 @@ export function calculatePortServices(
     tug_ops_capex_usd: tugCapex,
     pilot_ops_capex_usd: pilotCapex,
     total_ops_capex_usd: tugCapex + pilotCapex,
+    tugs_ownership: baseline.tugs_ownership ?? 'port',
+    pilot_boats_ownership: baseline.pilot_boats_ownership ?? 'port',
   }
 }
 
@@ -995,6 +1057,57 @@ export function calculateTerminalPiece(
   // Merge berth definitions with scenario configs
   const mergedBerths = mergeBerthConfigs(terminal.berths, terminal.berth_scenarios ?? [])
 
+  // ── Build ownership fraction maps ──
+  // Separate diesel/electric port fractions for scope classification (S1/S2/S3)
+  // Combined port fraction for line item display and OPEX splits
+  // Binary ownership: each equipment type is either all port-owned (1) or all third-party (0)
+  const baselinePortFractions: Record<string, number> = {}
+  const baselineDieselPortFracs: Record<string, number> = {}
+  const baselineElectricPortFracs: Record<string, number> = {}
+
+  const scenarioPortFractions: Record<string, number> = {}
+  const scenarioDieselPortFracs: Record<string, number> = {}
+  const scenarioElectricPortFracs: Record<string, number> = {}
+  const scenarioCapexPortFractions: Record<string, number> = {}
+
+  for (const [key, entry] of Object.entries(terminal.baseline_equipment)) {
+    const blFrac = (entry.ownership ?? 'port') === 'port' ? 1 : 0
+    baselinePortFractions[key] = blFrac
+    baselineDieselPortFracs[key] = blFrac
+    baselineElectricPortFracs[key] = blFrac
+
+    // Scenario: conversions inherit baseline ownership, additions have their own
+    const scenEntry = terminal.scenario_equipment[key] ?? { num_to_convert: 0, num_to_add: 0 }
+    const converted = Math.min(scenEntry.num_to_convert, entry.existing_diesel)
+    const addFrac = (scenEntry.add_ownership ?? 'port') === 'port' ? 1 : 0
+
+    // Remaining diesel keeps baseline ownership
+    const remainingDiesel = entry.existing_diesel - converted
+    scenarioDieselPortFracs[key] = blFrac
+
+    // Electric: existing (blFrac) + converted (blFrac) + added (addFrac)
+    const existElectric = entry.existing_electric
+    const totalElectric = existElectric + converted + scenEntry.num_to_add
+    if (totalElectric > 0) {
+      scenarioElectricPortFracs[key] = ((existElectric + converted) * blFrac + scenEntry.num_to_add * addFrac) / totalElectric
+    } else {
+      scenarioElectricPortFracs[key] = 1
+    }
+
+    const scenarioTotal = remainingDiesel + totalElectric
+    if (scenarioTotal > 0) {
+      scenarioPortFractions[key] = (remainingDiesel * blFrac + (existElectric + converted) * blFrac + scenEntry.num_to_add * addFrac) / scenarioTotal
+    } else {
+      scenarioPortFractions[key] = 1
+    }
+
+    // CAPEX port fraction (converted + added units only)
+    const capexQty = converted + scenEntry.num_to_add
+    if (capexQty > 0) {
+      scenarioCapexPortFractions[key] = (converted * blFrac + scenEntry.num_to_add * addFrac) / capexQty
+    }
+  }
+
   // ── Baseline Equipment ──
   // Diesel units → liters_per_teu, Electric units → kwh_per_teu
   // No CAPEX in baseline (empty capex counts)
@@ -1005,6 +1118,7 @@ export function calculateTerminalPiece(
     terminal.annual_teu,
     terminalEquipment,
     economicMap,
+    baselinePortFractions,
   )
 
   // ── Scenario Equipment (after electrification) ──
@@ -1017,6 +1131,7 @@ export function calculateTerminalPiece(
     terminal.annual_teu,
     terminalEquipment,
     economicMap,
+    scenarioPortFractions,
   )
 
   // ── Chargers (scenario only, for battery-powered equipment) ──
@@ -1036,7 +1151,9 @@ export function calculateTerminalPiece(
   const chargerResult = calculateChargers(
     batteryEquipmentCounts,
     assumptions.evse,
-    terminal.charger_overrides
+    terminal.charger_overrides,
+    scenarioElectricPortFracs,
+    terminal.charger_ownership,
   )
 
   // ── Berths / OPS ──
@@ -1204,6 +1321,114 @@ export function calculateTerminalPiece(
   const scenarioCo2 =
     scenarioResult.totals.total_co2_tons + berthResult.totals.scenario_co2_tons
 
+  // ── Ownership & Scope Calculations ──
+  const dieselEfWtw = economicMap['diesel_ef_wtw'] ?? 3.28564
+  const gridEf = economicMap['grid_ef'] ?? 0.4
+
+  // Equipment scoped emissions (baseline + scenario)
+  const baselineScopedEquip = computeEquipmentScopedEmissions(
+    baselineResult.lineItems, baselineDieselPortFracs, baselineElectricPortFracs, dieselEfWtw, gridEf,
+  )
+  const scenarioScopedEquip = computeEquipmentScopedEmissions(
+    scenarioResult.lineItems, scenarioDieselPortFracs, scenarioElectricPortFracs, dieselEfWtw, gridEf,
+  )
+
+  // Berth scoped emissions
+  // Baseline: all vessel HFO at berth → Scope 3 (not port equipment)
+  const baselineBerthScoped: ScopedEmissions = {
+    scope_1_tons: 0, scope_2_tons: 0,
+    scope_3_tons: berthResult.totals.baseline_co2_tons,
+    total_tons: berthResult.totals.baseline_co2_tons,
+  }
+
+  // Scenario berth: shore power CO2 split by OPS ownership
+  const opsBerths = mergedBerths.filter(b => b.ops_enabled)
+  const opsPortCount = opsBerths.filter(b => (b.ops_ownership ?? 'port') === 'port').length
+  const opsPortFraction = opsBerths.length > 0 ? opsPortCount / opsBerths.length : 1
+  const shorePowerCo2 = (berthResult.totals.scenario_shore_power_kwh * gridEf) / 1000
+  const berthDieselCo2Scen = berthResult.totals.scenario_co2_tons - shorePowerCo2
+
+  const scenarioBerthScoped: ScopedEmissions = {
+    scope_1_tons: 0,
+    scope_2_tons: shorePowerCo2 * opsPortFraction,
+    scope_3_tons: shorePowerCo2 * (1 - opsPortFraction) + berthDieselCo2Scen,
+    total_tons: berthResult.totals.scenario_co2_tons,
+  }
+
+  // Combine equipment + berth for terminal-level scoped emissions
+  const baselineScopedEmissions = addScopedEmissions(baselineScopedEquip, baselineBerthScoped)
+  const scenarioScopedEmissions = addScopedEmissions(scenarioScopedEquip, scenarioBerthScoped)
+
+  // CAPEX ownership split
+  // Equipment CAPEX
+  let equipCapexPort = 0, equipCapexThird = 0
+  for (const item of scenarioResult.lineItems) {
+    const frac = scenarioCapexPortFractions[item.equipment_key] ?? 1
+    equipCapexPort += item.total_capex_usd * frac
+    equipCapexThird += item.total_capex_usd * (1 - frac)
+  }
+  // Charger CAPEX (inherits from equipment electric ownership)
+  let chargerCapexPort = 0, chargerCapexThird = 0
+  for (const ch of chargerResult.lineItems) {
+    const frac = scenarioElectricPortFracs[ch.equipment_key] ?? 1
+    chargerCapexPort += ch.total_capex_usd * frac
+    chargerCapexThird += ch.total_capex_usd * (1 - frac)
+  }
+  // Berth OPS/DC CAPEX
+  let opsCapexPort = 0, opsCapexThird = 0, dcCapexPort = 0, dcCapexThird = 0
+  for (const b of berthResult.lineItems) {
+    if ((b.ops_ownership ?? 'port') === 'port') opsCapexPort += b.ops_total_capex_usd
+    else opsCapexThird += b.ops_total_capex_usd
+    if ((b.dc_ownership ?? 'port') === 'port') dcCapexPort += b.dc_capex_usd
+    else dcCapexThird += b.dc_capex_usd
+  }
+  // Grid CAPEX: always port-owned
+  const gridCapexPort = gridResult.total_grid_capex_usd
+
+  const ownershipCapex: OwnershipSplit = {
+    port_owned: equipCapexPort + chargerCapexPort + opsCapexPort + dcCapexPort + gridCapexPort,
+    third_party: equipCapexThird + chargerCapexThird + opsCapexThird + dcCapexThird,
+  }
+
+  // OPEX ownership splits
+  // Baseline: equipment OPEX + berth fuel + grid OPEX
+  let blEquipOpexPort = 0, blEquipOpexThird = 0
+  for (const item of baselineResult.lineItems) {
+    const frac = baselinePortFractions[item.equipment_key] ?? 1
+    blEquipOpexPort += item.annual_total_opex_usd * frac
+    blEquipOpexThird += item.annual_total_opex_usd * (1 - frac)
+  }
+  const ownershipOpexBaseline: OwnershipSplit = {
+    port_owned: blEquipOpexPort + baselineGridOpexUsd,
+    third_party: blEquipOpexThird,
+  }
+
+  // Scenario: equipment OPEX + charger OPEX + berth OPS/DC OPEX + grid OPEX
+  let scEquipOpexPort = 0, scEquipOpexThird = 0
+  for (const item of scenarioResult.lineItems) {
+    const frac = scenarioPortFractions[item.equipment_key] ?? 1
+    scEquipOpexPort += item.annual_total_opex_usd * frac
+    scEquipOpexThird += item.annual_total_opex_usd * (1 - frac)
+  }
+  let chargerOpexPort = 0, chargerOpexThird = 0
+  for (const ch of chargerResult.lineItems) {
+    const frac = scenarioElectricPortFracs[ch.equipment_key] ?? 1
+    chargerOpexPort += ch.total_annual_opex_usd * frac
+    chargerOpexThird += ch.total_annual_opex_usd * (1 - frac)
+  }
+  let berthOpsOpexPort = 0, berthOpsOpexThird = 0
+  for (const b of berthResult.lineItems) {
+    if ((b.ops_ownership ?? 'port') === 'port') berthOpsOpexPort += b.ops_annual_opex_usd
+    else berthOpsOpexThird += b.ops_annual_opex_usd
+    if ((b.dc_ownership ?? 'port') === 'port') berthOpsOpexPort += b.dc_annual_opex_usd
+    else berthOpsOpexThird += b.dc_annual_opex_usd
+  }
+
+  const ownershipOpexScenario: OwnershipSplit = {
+    port_owned: scEquipOpexPort + chargerOpexPort + berthOpsOpexPort + gridResult.grid_opex_usd,
+    third_party: scEquipOpexThird + chargerOpexThird + berthOpsOpexThird,
+  }
+
   return {
     terminal_id: terminal.id,
     terminal_name: terminal.name,
@@ -1240,6 +1465,12 @@ export function calculateTerminalPiece(
     total_capex_usd: totalCapex,
     annual_opex_savings_usd: totalBaselineOpex - totalScenarioOpex,
     annual_co2_savings_tons: baselineCo2 - scenarioCo2,
+
+    ownership_capex: ownershipCapex,
+    ownership_opex_baseline: ownershipOpexBaseline,
+    ownership_opex_scenario: ownershipOpexScenario,
+    baseline_scoped_emissions: baselineScopedEmissions,
+    scenario_scoped_emissions: scenarioScopedEmissions,
   }
 }
 
@@ -1355,6 +1586,89 @@ export function calculatePortPiece(
   const simplePayback =
     annualOpexSavings > 0 ? totalCapex / annualOpexSavings : null
 
+  // ── Aggregate ownership & scope across terminals ──
+  let portOwnershipCapex = { ...ZERO_OWNERSHIP }
+  let portOwnershipOpexBaseline = { ...ZERO_OWNERSHIP }
+  let portOwnershipOpexScenario = { ...ZERO_OWNERSHIP }
+  let portBaselineEmissions = { ...ZERO_SCOPED }
+  let portScenarioEmissions = { ...ZERO_SCOPED }
+
+  for (const tr of terminalResults) {
+    portOwnershipCapex = addOwnershipSplits(portOwnershipCapex, tr.ownership_capex)
+    portOwnershipOpexBaseline = addOwnershipSplits(portOwnershipOpexBaseline, tr.ownership_opex_baseline)
+    portOwnershipOpexScenario = addOwnershipSplits(portOwnershipOpexScenario, tr.ownership_opex_scenario)
+    portBaselineEmissions = addScopedEmissions(portBaselineEmissions, tr.baseline_scoped_emissions)
+    portScenarioEmissions = addScopedEmissions(portScenarioEmissions, tr.scenario_scoped_emissions)
+  }
+
+  // Add port services ownership & scope
+  if (portServicesResult) {
+    const tugOwn = portServicesResult.tugs_ownership ?? 'port'
+    const pilotOwn = portServicesResult.pilot_boats_ownership ?? 'port'
+    const dieselEfWtw = economicMap['diesel_ef_wtw'] ?? 3.28564
+    const gridEf = economicMap['grid_ef'] ?? 0.4
+
+    // Port services CAPEX split
+    const tugCapexOwner = tugOwn === 'port' ? 'port_owned' : 'third_party'
+    const pilotCapexOwner = pilotOwn === 'port' ? 'port_owned' : 'third_party'
+    const psCapexSplit: OwnershipSplit = { port_owned: 0, third_party: 0 }
+    psCapexSplit[tugCapexOwner] += portServicesResult.tug_ops_capex_usd
+    psCapexSplit[pilotCapexOwner] += portServicesResult.pilot_ops_capex_usd
+    portOwnershipCapex = addOwnershipSplits(portOwnershipCapex, psCapexSplit)
+
+    // Port services baseline OPEX split
+    const blTugOpex = portServicesResult.baseline_tug_fuel_liters * (economicMap['diesel_price'] ?? 1.23) +
+      portServicesResult.baseline_tug_energy_kwh * (economicMap['electricity_price'] ?? 0.12)
+    const blPilotOpex = portServicesResult.baseline_pilot_fuel_liters * (economicMap['diesel_price'] ?? 1.23) +
+      portServicesResult.baseline_pilot_energy_kwh * (economicMap['electricity_price'] ?? 0.12)
+    const blMaint = portServicesResult.baseline_ops_maintenance_usd
+    const psBlOpex: OwnershipSplit = { port_owned: 0, third_party: 0 }
+    psBlOpex[tugCapexOwner] += blTugOpex + (tugOwn === 'port' ? blMaint : 0)
+    psBlOpex[pilotCapexOwner] += blPilotOpex + (tugOwn !== 'port' ? blMaint : 0)
+    portOwnershipOpexBaseline = addOwnershipSplits(portOwnershipOpexBaseline, psBlOpex)
+
+    // Port services scenario OPEX split
+    const scTugOpex = portServicesResult.scenario_tug_fuel_liters * (economicMap['diesel_price'] ?? 1.23) +
+      portServicesResult.scenario_tug_energy_kwh * (economicMap['electricity_price'] ?? 0.12)
+    const scPilotOpex = portServicesResult.scenario_pilot_fuel_liters * (economicMap['diesel_price'] ?? 1.23) +
+      portServicesResult.scenario_pilot_energy_kwh * (economicMap['electricity_price'] ?? 0.12)
+    const scMaint = portServicesResult.scenario_ops_maintenance_usd
+    const psScOpex: OwnershipSplit = { port_owned: 0, third_party: 0 }
+    psScOpex[tugCapexOwner] += scTugOpex + (tugOwn === 'port' ? scMaint : 0)
+    psScOpex[pilotCapexOwner] += scPilotOpex + (tugOwn !== 'port' ? scMaint : 0)
+    portOwnershipOpexScenario = addOwnershipSplits(portOwnershipOpexScenario, psScOpex)
+
+    // Port services scoped emissions (baseline)
+    const blTugDieselCo2 = (portServicesResult.baseline_tug_fuel_liters * dieselEfWtw) / 1000
+    const blTugElecCo2 = (portServicesResult.baseline_tug_energy_kwh * gridEf) / 1000
+    const blPilotDieselCo2 = (portServicesResult.baseline_pilot_fuel_liters * dieselEfWtw) / 1000
+    const blPilotElecCo2 = (portServicesResult.baseline_pilot_energy_kwh * gridEf) / 1000
+
+    const psBlScoped: ScopedEmissions = {
+      scope_1_tons: (tugOwn === 'port' ? blTugDieselCo2 : 0) + (pilotOwn === 'port' ? blPilotDieselCo2 : 0),
+      scope_2_tons: (tugOwn === 'port' ? blTugElecCo2 : 0) + (pilotOwn === 'port' ? blPilotElecCo2 : 0),
+      scope_3_tons: (tugOwn !== 'port' ? blTugDieselCo2 + blTugElecCo2 : 0) +
+                    (pilotOwn !== 'port' ? blPilotDieselCo2 + blPilotElecCo2 : 0),
+      total_tons: blTugDieselCo2 + blTugElecCo2 + blPilotDieselCo2 + blPilotElecCo2,
+    }
+    portBaselineEmissions = addScopedEmissions(portBaselineEmissions, psBlScoped)
+
+    // Port services scoped emissions (scenario)
+    const scTugDieselCo2 = (portServicesResult.scenario_tug_fuel_liters * dieselEfWtw) / 1000
+    const scTugElecCo2 = (portServicesResult.scenario_tug_energy_kwh * gridEf) / 1000
+    const scPilotDieselCo2 = (portServicesResult.scenario_pilot_fuel_liters * dieselEfWtw) / 1000
+    const scPilotElecCo2 = (portServicesResult.scenario_pilot_energy_kwh * gridEf) / 1000
+
+    const psScScoped: ScopedEmissions = {
+      scope_1_tons: (tugOwn === 'port' ? scTugDieselCo2 : 0) + (pilotOwn === 'port' ? scPilotDieselCo2 : 0),
+      scope_2_tons: (tugOwn === 'port' ? scTugElecCo2 : 0) + (pilotOwn === 'port' ? scPilotElecCo2 : 0),
+      scope_3_tons: (tugOwn !== 'port' ? scTugDieselCo2 + scTugElecCo2 : 0) +
+                    (pilotOwn !== 'port' ? scPilotDieselCo2 + scPilotElecCo2 : 0),
+      total_tons: scTugDieselCo2 + scTugElecCo2 + scPilotDieselCo2 + scPilotElecCo2,
+    }
+    portScenarioEmissions = addScopedEmissions(portScenarioEmissions, psScScoped)
+  }
+
   return {
     port: request.port,
     terminals: terminalResults,
@@ -1383,6 +1697,12 @@ export function calculatePortPiece(
       co2_reduction_percent: co2ReductionPercent,
       annual_opex_savings_usd: annualOpexSavings,
       simple_payback_years: simplePayback,
+
+      ownership_capex: portOwnershipCapex,
+      ownership_opex_baseline: portOwnershipOpexBaseline,
+      ownership_opex_scenario: portOwnershipOpexScenario,
+      baseline_emissions: portBaselineEmissions,
+      scenario_emissions: portScenarioEmissions,
     },
     economic_assumptions_used: economicMap,
   }

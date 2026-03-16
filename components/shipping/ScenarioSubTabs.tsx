@@ -9,6 +9,7 @@ type Props = {
   onSelectScenario: (scenarioId: string) => void
   onCreateScenario?: () => void
   onRenameScenario?: (scenarioId: string, newName: string) => void
+  onDeleteScenario?: (scenarioId: string) => void
   disabled?: boolean
 }
 
@@ -18,6 +19,7 @@ export default function ScenarioSubTabs({
   onSelectScenario,
   onCreateScenario,
   onRenameScenario,
+  onDeleteScenario,
   disabled,
 }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -94,6 +96,21 @@ export default function ScenarioSubTabs({
                 title="Rename scenario"
               >
                 ✎
+              </button>
+            )}
+            {onDeleteScenario && scenarios.length > 1 && (
+              <button
+                onClick={() => {
+                  if (confirm(`Delete "${s.scenario_name}"? This cannot be undone.`)) {
+                    onDeleteScenario(s.id)
+                  }
+                }}
+                className={`w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-70 hover:opacity-100! transition-opacity text-[10px] ${
+                  'text-[#9e5858] hover:bg-red-50'
+                }`}
+                title="Delete scenario"
+              >
+                ✕
               </button>
             )}
           </div>

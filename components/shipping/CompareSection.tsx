@@ -50,7 +50,15 @@ const CAPEX_SEGMENTS = [
   { label: 'Port Services', key: 'port_services_capex_usd' },
 ] as const
 
-const METRICS = [
+type MetricDef = {
+  label: string
+  key: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  format: (v?: any) => string
+  getValue?: (totals: PiecePortResult['totals']) => number | undefined
+}
+
+const METRICS: MetricDef[] = [
   { label: 'Total CAPEX', key: 'total_capex_usd', format: formatCurrency },
   { label: 'Equipment CAPEX', key: 'equipment_capex_usd', format: formatCurrency },
   { label: 'OPS CAPEX', key: 'ops_capex_usd', format: formatCurrency },
@@ -58,18 +66,28 @@ const METRICS = [
   { label: 'Grid CAPEX', key: 'grid_capex_usd', format: formatCurrency },
   { label: 'Charger CAPEX', key: 'charger_capex_usd', format: formatCurrency },
   { label: 'Port Services CAPEX', key: 'port_services_capex_usd', format: formatCurrency },
-  { label: 'Annual OPEX Savings', key: 'annual_opex_savings_usd', format: (v?: number) => {
+  { label: 'Port-Owned CAPEX', key: 'ownership_capex_port', format: formatCurrency,
+    getValue: (t) => t.ownership_capex?.port_owned },
+  { label: 'Third-Party CAPEX', key: 'ownership_capex_3p', format: formatCurrency,
+    getValue: (t) => t.ownership_capex?.third_party },
+  { label: 'Annual OPEX Savings', key: 'annual_opex_savings_usd', format: (v?: number | null) => {
     if (v === undefined || v === null) return '-'
     return v > 0 ? formatCurrency(v) : '-'
   }},
-  { label: 'Annual OPEX Increase', key: 'annual_opex_savings_usd', format: (v?: number) => {
+  { label: 'Annual OPEX Increase', key: 'annual_opex_savings_usd', format: (v?: number | null) => {
     if (v === undefined || v === null) return '-'
     return v < 0 ? formatCurrency(Math.abs(v)) : '-'
   }},
-  { label: 'CO\u2082 Reduction', key: 'co2_reduction_percent', format: (v?: number) => v !== undefined ? `${v.toFixed(1)}%` : '-' },
-  { label: 'CO\u2082 Saved (tons/yr)', key: 'co2_tons_saved', format: (v?: number) => v !== undefined ? formatNumber(v) : '-' },
+  { label: 'CO\u2082 Reduction', key: 'co2_reduction_percent', format: (v?: number | null) => v !== undefined && v !== null ? `${v.toFixed(1)}%` : '-' },
+  { label: 'CO\u2082 Saved (tons/yr)', key: 'co2_tons_saved', format: (v?: number | null) => v !== undefined && v !== null ? formatNumber(v) : '-' },
+  { label: 'Scope 1 CO\u2082 (scenario)', key: 'scope_1_scenario', format: (v?: number | null) => v !== undefined && v !== null ? `${formatNumber(v)} t` : '-',
+    getValue: (t) => t.scenario_emissions?.scope_1_tons },
+  { label: 'Scope 2 CO\u2082 (scenario)', key: 'scope_2_scenario', format: (v?: number | null) => v !== undefined && v !== null ? `${formatNumber(v)} t` : '-',
+    getValue: (t) => t.scenario_emissions?.scope_2_tons },
+  { label: 'Scope 3 CO\u2082 (scenario)', key: 'scope_3_scenario', format: (v?: number | null) => v !== undefined && v !== null ? `${formatNumber(v)} t` : '-',
+    getValue: (t) => t.scenario_emissions?.scope_3_tons },
   { label: 'Simple Payback', key: 'simple_payback_years', format: (v?: number | null) => v !== undefined && v !== null ? `${v.toFixed(1)} years` : '-' },
-  { label: 'Diesel Saved (L/yr)', key: 'diesel_liters_saved', format: (v?: number) => v !== undefined ? `${formatNumber(v)} L` : '-' },
+  { label: 'Diesel Saved (L/yr)', key: 'diesel_liters_saved', format: (v?: number | null) => v !== undefined && v !== null ? `${formatNumber(v)} L` : '-' },
 ]
 
 // ── Best-value direction ──
@@ -77,18 +95,25 @@ const LOWER_IS_BETTER = new Set([
   'total_capex_usd', 'equipment_capex_usd', 'ops_capex_usd',
   'dc_capex_usd', 'grid_capex_usd', 'charger_capex_usd',
   'port_services_capex_usd', 'simple_payback_years',
-  'scenario_co2_tons',
+  'scenario_co2_tons', 'ownership_capex_port', 'ownership_capex_3p',
+  'scope_1_scenario', 'scope_2_scenario', 'scope_3_scenario',
 ])
 const HIGHER_IS_BETTER = new Set([
   'co2_reduction_percent', 'co2_tons_saved', 'diesel_liters_saved',
   'annual_opex_savings_usd',
 ])
 
-function findBestIndex(metricKey: string, scenarios: LoadedScenario[]): number | null {
-  const values = scenarios.map((s) => {
-    const v = (s.result.totals as Record<string, unknown>)[metricKey]
+function getMetricValue(metricKey: string, totals: PiecePortResult['totals'], metricDef?: MetricDef): number | null {
+  if (metricDef?.getValue) {
+    const v = metricDef.getValue(totals)
     return typeof v === 'number' ? v : null
-  })
+  }
+  const v = (totals as Record<string, unknown>)[metricKey]
+  return typeof v === 'number' ? v : null
+}
+
+function findBestIndex(metricKey: string, scenarios: LoadedScenario[], metricDef?: MetricDef): number | null {
+  const values = scenarios.map((s) => getMetricValue(metricKey, s.result.totals, metricDef))
   if (values.some((v) => v === null)) return null
   const nums = values as number[]
   if (nums.every((v) => v === nums[0])) return null
@@ -97,15 +122,15 @@ function findBestIndex(metricKey: string, scenarios: LoadedScenario[]): number |
   return null
 }
 
-function findBestForTable(metricKey: string, metricLabel: string, scenarios: LoadedScenario[]): number | null {
-  if (metricLabel === 'Annual OPEX Increase') return null
-  if (metricLabel === 'Annual OPEX Savings') {
+function findBestForTable(metric: MetricDef, scenarios: LoadedScenario[]): number | null {
+  if (metric.label === 'Annual OPEX Increase') return null
+  if (metric.label === 'Annual OPEX Savings') {
     const values = scenarios.map((s) => s.result.totals.annual_opex_savings_usd)
     if (values.every((v) => v === values[0])) return null
     const max = Math.max(...values)
     return max > 0 ? values.indexOf(max) : null
   }
-  return findBestIndex(metricKey, scenarios)
+  return findBestIndex(metric.key, scenarios, metric)
 }
 
 // ── Horizontal comparison bar ──
@@ -436,15 +461,14 @@ export default function CompareSection({ scenarioList, activeProjectId, onCompar
           </thead>
           <tbody>
             {METRICS.map((metric) => {
-              const bestIdx = findBestForTable(metric.key, metric.label, loadedScenarios)
+              const bestIdx = findBestForTable(metric, loadedScenarios)
               return (
                 <tr key={`${metric.key}-${metric.label}`} className="border-b border-gray-100 hover:bg-gray-50">
                   <td className="py-2.5 px-4 text-xs font-medium text-[#585858]">
                     {metric.label}
                   </td>
                   {loadedScenarios.map((s, idx) => {
-                    const totals = s.result.totals as Record<string, unknown>
-                    const val = totals[metric.key]
+                    const val = getMetricValue(metric.key, s.result.totals, metric)
                     const isBest = bestIdx === idx
                     const color = getScenarioColor(idx)
                     return (
@@ -455,7 +479,7 @@ export default function CompareSection({ scenarioList, activeProjectId, onCompar
                         }`}
                         style={isBest ? { color: color.primary } : undefined}
                       >
-                        {metric.format(val as number)}
+                        {metric.format(val)}
                       </td>
                     )
                   })}
@@ -704,6 +728,74 @@ export default function CompareSection({ scenarioList, activeProjectId, onCompar
                       <span className="text-[#8c8c8c]">OPEX</span>
                       <span className="font-semibold text-[#414141]">{formatCurrency(t.scenario_opex_usd)}/yr</span>
                     </div>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* ── Emissions by Scope ── */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <h3 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-[#8c8c8c] mb-5">
+          <Image src="/Icons/Icons/Efficiency/Pie chart.svg" alt="" width={16} height={16} className="opacity-40" />
+          Emissions by Scope (GHG Protocol)
+        </h3>
+        <div className={`grid gap-4 ${loadedScenarios.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+          {loadedScenarios.map((s, idx) => {
+            const em = s.result.totals.scenario_emissions
+            const color = getScenarioColor(idx)
+            if (!em) return null
+            const total = em.scope_1_tons + em.scope_2_tons + em.scope_3_tons
+            const scopes = [
+              { label: 'Scope 1', sublabel: 'Port-owned diesel', tons: em.scope_1_tons, color: '#c62828' },
+              { label: 'Scope 2', sublabel: 'Port-owned electricity', tons: em.scope_2_tons, color: '#1565c0' },
+              { label: 'Scope 3', sublabel: 'Third-party', tons: em.scope_3_tons, color: '#6a5e4c' },
+            ]
+
+            return (
+              <div
+                key={s.id}
+                className="rounded-xl p-5 border"
+                style={{ borderColor: color.primary + '40', backgroundColor: color.lightBg }}
+              >
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="w-3 h-3 rounded-full inline-block" style={{ backgroundColor: color.primary }} />
+                  <span className="text-sm font-semibold" style={{ color: color.primary }}>{s.name}</span>
+                </div>
+
+                {/* Stacked bar */}
+                <div className="mb-4">
+                  <div className="flex h-6 rounded-full overflow-hidden bg-gray-200">
+                    {scopes.map((sc) => {
+                      const pct = total > 0 ? (sc.tons / total) * 100 : 0
+                      if (pct < 0.5) return null
+                      return (
+                        <div
+                          key={sc.label}
+                          className="h-full"
+                          style={{ width: `${pct}%`, backgroundColor: sc.color }}
+                          title={`${sc.label}: ${formatNumber(sc.tons)} t (${pct.toFixed(0)}%)`}
+                        />
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  {scopes.map((sc) => (
+                    <div key={sc.label} className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: sc.color }} />
+                        <span className="text-[10px] text-[#8c8c8c]">{sc.label}</span>
+                      </div>
+                      <span className="text-xs font-semibold text-[#414141]">{formatNumber(sc.tons)} t</span>
+                    </div>
+                  ))}
+                  <div className="border-t border-gray-200 pt-1.5 mt-1.5 flex justify-between">
+                    <span className="text-[10px] font-semibold text-[#585858]">Total</span>
+                    <span className="text-xs font-bold text-[#414141]">{formatNumber(total)} t/yr</span>
                   </div>
                 </div>
               </div>

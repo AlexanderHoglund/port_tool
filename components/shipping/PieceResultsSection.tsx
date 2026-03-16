@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Image from 'next/image'
-import type { PiecePortResult, PieceTerminalResult } from '@/lib/types'
+import type { PiecePortResult, PieceTerminalResult, ScopedEmissions } from '@/lib/types'
 
 type Props = {
   result: PiecePortResult
@@ -270,6 +270,63 @@ function TerminalDetailCard({ terminal }: { terminal: PieceTerminalResult }) {
   )
 }
 
+function ScopeEmissionsCard({ baseline, scenario, gridEf }: { baseline: ScopedEmissions; scenario: ScopedEmissions; gridEf: number }) {
+  const scopes = [
+    { label: 'Scope 1', sublabel: 'Port-owned diesel', color: '#c62828', bgColor: '#feeeea',
+      baseline: baseline.scope_1_tons, scenario: scenario.scope_1_tons },
+    { label: 'Scope 2', sublabel: 'Port-owned electricity', color: '#1565c0', bgColor: '#e8f1fb',
+      baseline: baseline.scope_2_tons, scenario: scenario.scope_2_tons },
+    { label: 'Scope 3', sublabel: 'Third-party equipment', color: '#6a5e4c', bgColor: '#f5f3f0',
+      baseline: baseline.scope_3_tons, scenario: scenario.scope_3_tons },
+  ]
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <h3 className="text-[11px] font-bold uppercase tracking-widest text-[#8c8c8c] mb-4">
+        Emissions by Scope (GHG Protocol)
+      </h3>
+      {gridEf === 0 && (
+        <div className="mb-4 rounded-lg px-4 py-2.5 bg-amber-50 border border-amber-200 text-xs text-amber-800">
+          <strong>Grid emission factor is 0</strong> (100% green grid assumed). Scope 2 will be zero.
+          Set <code className="bg-amber-100 px-1 rounded">grid_ef</code> in Assumptions &gt; Economic Parameters to model grid carbon intensity (e.g. 0.4 kgCO₂/kWh).
+        </div>
+      )}
+      <div className="grid grid-cols-3 gap-4">
+        {scopes.map((s) => {
+          const delta = s.baseline - s.scenario
+          const pct = s.baseline > 0 ? (delta / s.baseline) * 100 : 0
+          return (
+            <div key={s.label} className="rounded-lg p-4" style={{ backgroundColor: s.bgColor }}>
+              <div className="text-[10px] font-bold uppercase" style={{ color: s.color }}>
+                {s.label}
+              </div>
+              <div className="text-[10px] text-[#8c8c8c] mb-2">{s.sublabel}</div>
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-[#8c8c8c]">Baseline:</span>
+                  <span className="font-medium text-[#414141]">{formatNumber(s.baseline)} t</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#8c8c8c]">Scenario:</span>
+                  <span className="font-medium text-[#414141]">{formatNumber(s.scenario)} t</span>
+                </div>
+                {delta !== 0 && (
+                  <div className="flex justify-between border-t pt-1" style={{ borderColor: s.color + '30' }}>
+                    <span className="text-[#8c8c8c]">Change:</span>
+                    <span className={`font-semibold ${delta > 0 ? 'text-green-600' : 'text-amber-600'}`}>
+                      {delta > 0 ? '-' : '+'}{formatNumber(Math.abs(delta))} t ({Math.abs(pct).toFixed(1)}%)
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export default function PieceResultsSection({ result }: Props) {
   const { totals } = result
 
@@ -318,6 +375,15 @@ export default function PieceResultsSection({ result }: Props) {
         />
       </div>
 
+      {/* Emissions by Scope */}
+      {totals.scenario_emissions && (
+        <ScopeEmissionsCard
+          baseline={totals.baseline_emissions}
+          scenario={totals.scenario_emissions}
+          gridEf={result.economic_assumptions_used?.['grid_ef'] ?? 0.4}
+        />
+      )}
+
       {/* CAPEX breakdown */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <h3 className="text-[11px] font-bold uppercase tracking-widest text-[#8c8c8c] mb-4">
@@ -355,6 +421,47 @@ export default function PieceResultsSection({ result }: Props) {
         </div>
       </div>
 
+      {/* Investment by Ownership */}
+      {totals.ownership_capex && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <h3 className="text-[11px] font-bold uppercase tracking-widest text-[#8c8c8c] mb-4">
+            Investment by Ownership
+          </h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-2 text-[10px] font-bold uppercase text-[#8c8c8c]"></th>
+                  <th className="text-right py-2 px-3 text-[10px] font-bold uppercase text-[#3c5e86]">Port-Owned</th>
+                  <th className="text-right py-2 px-3 text-[10px] font-bold uppercase text-[#8c6d3c]">Third-Party</th>
+                  <th className="text-right py-2 px-3 text-[10px] font-bold uppercase text-[#414141]">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b border-gray-100">
+                  <td className="py-2 text-[#585858]">Total CAPEX</td>
+                  <td className="py-2 px-3 text-right text-[#3c5e86] font-medium">{formatCurrency(totals.ownership_capex.port_owned)}</td>
+                  <td className="py-2 px-3 text-right text-[#8c6d3c] font-medium">{formatCurrency(totals.ownership_capex.third_party)}</td>
+                  <td className="py-2 px-3 text-right text-[#414141] font-semibold">{formatCurrency(totals.total_capex_usd)}</td>
+                </tr>
+                <tr className="border-b border-gray-100">
+                  <td className="py-2 text-[#585858]">Baseline OPEX</td>
+                  <td className="py-2 px-3 text-right text-[#3c5e86] font-medium">{formatCurrency(totals.ownership_opex_baseline.port_owned)}/yr</td>
+                  <td className="py-2 px-3 text-right text-[#8c6d3c] font-medium">{formatCurrency(totals.ownership_opex_baseline.third_party)}/yr</td>
+                  <td className="py-2 px-3 text-right text-[#414141] font-semibold">{formatCurrency(totals.baseline_opex_usd)}/yr</td>
+                </tr>
+                <tr>
+                  <td className="py-2 text-[#585858]">Scenario OPEX</td>
+                  <td className="py-2 px-3 text-right text-[#3c5e86] font-medium">{formatCurrency(totals.ownership_opex_scenario.port_owned)}/yr</td>
+                  <td className="py-2 px-3 text-right text-[#8c6d3c] font-medium">{formatCurrency(totals.ownership_opex_scenario.third_party)}/yr</td>
+                  <td className="py-2 px-3 text-right text-[#414141] font-semibold">{formatCurrency(totals.scenario_opex_usd)}/yr</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Baseline vs Scenario comparison */}
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-[#f5f3f0] rounded-xl p-5">
@@ -378,6 +485,23 @@ export default function PieceResultsSection({ result }: Props) {
               <span className="text-[#7a7267]">Total OPEX:</span>
               <span className="text-[#414141] font-semibold">{formatCurrency(totals.baseline_opex_usd)}/year</span>
             </div>
+            {totals.baseline_emissions && (
+              <div className="border-t border-[#d4cfc8] pt-2 mt-2 space-y-1">
+                <div className="text-[10px] font-bold text-[#7a7267] uppercase">Scope Breakdown</div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-[#7a7267]">Scope 1 (diesel):</span>
+                  <span className="text-[#414141]">{formatNumber(totals.baseline_emissions.scope_1_tons)} t</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-[#7a7267]">Scope 2 (electric):</span>
+                  <span className="text-[#414141]">{formatNumber(totals.baseline_emissions.scope_2_tons)} t</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-[#7a7267]">Scope 3 (3rd party):</span>
+                  <span className="text-[#414141]">{formatNumber(totals.baseline_emissions.scope_3_tons)} t</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -402,6 +526,23 @@ export default function PieceResultsSection({ result }: Props) {
               <span className="text-[#5a8ab5]">Total OPEX:</span>
               <span className="text-[#414141] font-semibold">{formatCurrency(totals.scenario_opex_usd)}/year</span>
             </div>
+            {totals.scenario_emissions && (
+              <div className="border-t border-[#b8daf0] pt-2 mt-2 space-y-1">
+                <div className="text-[10px] font-bold text-[#5a8ab5] uppercase">Scope Breakdown</div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-[#5a8ab5]">Scope 1 (diesel):</span>
+                  <span className="text-[#414141]">{formatNumber(totals.scenario_emissions.scope_1_tons)} t</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-[#5a8ab5]">Scope 2 (electric):</span>
+                  <span className="text-[#414141]">{formatNumber(totals.scenario_emissions.scope_2_tons)} t</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-[#5a8ab5]">Scope 3 (3rd party):</span>
+                  <span className="text-[#414141]">{formatNumber(totals.scenario_emissions.scope_3_tons)} t</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
