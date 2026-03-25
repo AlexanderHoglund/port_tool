@@ -20,12 +20,29 @@ export type OwnershipSplit = {
   third_party: number
 }
 
+/** Per-category ownership breakdown for detailed results display */
+export type OwnershipBreakdown = {
+  equipment: OwnershipSplit
+  chargers: OwnershipSplit
+  ops: OwnershipSplit
+  dc: OwnershipSplit
+  grid: OwnershipSplit
+  port_services: OwnershipSplit
+}
+
 /** Scoped emissions following GHG Protocol */
 export type ScopedEmissions = {
   scope_1_tons: number  // Port-owned diesel (direct combustion)
   scope_2_tons: number  // Port-owned electricity (purchased energy)
   scope_3_tons: number  // Third-party equipment (all fuel types)
   total_tons: number
+}
+
+/** Per-category scoped emissions breakdown */
+export type ScopedEmissionsBreakdown = {
+  equipment: ScopedEmissions
+  ops: ScopedEmissions       // Shore power / berth
+  port_services: ScopedEmissions
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -36,7 +53,6 @@ export type ScopedEmissions = {
 export type BaselineEquipmentEntry = {
   existing_diesel: number    // e.g., 5 diesel terminal tractors
   existing_electric: number  // e.g., 2 already electric tractors
-  ownership?: OwnershipType  // All units port-owned or third-party (default: 'port')
 }
 
 /** Vessel call entry — defines a vessel type's annual call frequency and berth time */
@@ -55,8 +71,6 @@ export type BerthDefinition = {
   max_vessel_segment_key: string       // Design capacity — largest vessel the berth can handle (drives CAPEX, cable sizing)
   ops_existing: boolean        // Does this berth already have OPS infrastructure?
   dc_existing: boolean         // Does this berth already have DC charging infrastructure?
-  ops_ownership?: OwnershipType  // OPS infrastructure ownership (default: 'port')
-  dc_ownership?: OwnershipType   // DC infrastructure ownership (default: 'port')
 }
 
 /** Buildings & lighting configuration — annual energy consumption */
@@ -86,7 +100,6 @@ export type PortServicesBaseline = {
 export type ScenarioEquipmentEntry = {
   num_to_convert: number  // Convert X diesel → electric
   num_to_add: number      // Add X new electric units
-  add_ownership?: OwnershipType  // Ownership of new additions (default: 'port')
 }
 
 /** Berth scenario config: OPS/DC toggles for each berth */
@@ -161,6 +174,7 @@ export type PieceTerminalConfig = {
   id: string
   name: string
   terminal_type: TerminalType
+  ownership?: OwnershipType     // Terminal-level ownership (default: 'port') — all equipment/berths/chargers inherit this
 
   // ══════════════════════════════════════════════════════════
   // OPERATIONS — Throughput & vessel traffic (baseline data)
@@ -172,6 +186,10 @@ export type PieceTerminalConfig = {
 
   /** Vessel calls at terminal level — shared across all berths */
   vessel_calls: BerthVesselCall[]
+
+  /** Terminal-level OPS/DC call counts (mutually exclusive: ops + dc <= total calls) */
+  ops_calls_per_year?: number
+  dc_calls_per_year?: number
 
   // ══════════════════════════════════════════════════════════
   // BASELINE (Section 1) — Current state
@@ -198,7 +216,6 @@ export type PieceTerminalConfig = {
 
   // Charger overrides (auto-calculated from equipment, but can be manually adjusted)
   charger_overrides?: Record<string, number>
-  charger_ownership?: Record<string, OwnershipType>  // Per-charger-type ownership (default: 'port')
 
   // Grid infrastructure
   cable_length_m?: number         // Total cable run in meters
@@ -236,6 +253,7 @@ export type BaselineTerminalConfig = {
   id: string
   name: string
   terminal_type: TerminalType
+  ownership?: OwnershipType     // Terminal-level ownership (default: 'port')
   berths: BerthDefinition[]
   baseline_equipment: Record<string, BaselineEquipmentEntry>
   cable_length_m?: number
@@ -244,6 +262,8 @@ export type BaselineTerminalConfig = {
   annual_passengers?: number
   annual_ceu?: number
   vessel_calls: BerthVesselCall[]
+  ops_calls_per_year?: number
+  dc_calls_per_year?: number
 }
 
 /** Project-level baseline blob (stored as JSONB in piece_projects.baseline_config) */
@@ -259,7 +279,8 @@ export type ScenarioTerminalConfig = {
   scenario_equipment: Record<string, ScenarioEquipmentEntry>
   berth_scenarios: BerthScenarioConfig[]
   charger_overrides?: Record<string, number>
-  charger_ownership?: Record<string, OwnershipType>
+  ops_calls_per_year?: number   // Scenario override for OPS calls (undefined = use baseline)
+  dc_calls_per_year?: number    // Scenario override for DC calls (undefined = use baseline)
 }
 
 /** Scenario-level data blob (stored as JSONB in piece_scenarios.scenario_config) */
@@ -716,9 +737,6 @@ export type PieceBerthLineItem = {
   scenario_co2_tons: number
   scenario_fuel_cost_usd: number
   scenario_energy_cost_usd: number
-  // Ownership
-  ops_ownership: OwnershipType
-  dc_ownership: OwnershipType
 }
 
 export type PieceGridResult = {
@@ -853,10 +871,15 @@ export type PieceTerminalResult = {
 
   // Ownership & scope splits
   ownership_capex: OwnershipSplit
+  ownership_capex_detail: OwnershipBreakdown
   ownership_opex_baseline: OwnershipSplit
+  ownership_opex_baseline_detail: OwnershipBreakdown
   ownership_opex_scenario: OwnershipSplit
+  ownership_opex_scenario_detail: OwnershipBreakdown
   baseline_scoped_emissions: ScopedEmissions
+  baseline_scoped_detail: ScopedEmissionsBreakdown
   scenario_scoped_emissions: ScopedEmissions
+  scenario_scoped_detail: ScopedEmissionsBreakdown
 }
 
 export type PiecePortResult = {
@@ -894,10 +917,15 @@ export type PiecePortResult = {
 
     // Ownership & scope splits
     ownership_capex: OwnershipSplit
+    ownership_capex_detail: OwnershipBreakdown
     ownership_opex_baseline: OwnershipSplit
+    ownership_opex_baseline_detail: OwnershipBreakdown
     ownership_opex_scenario: OwnershipSplit
+    ownership_opex_scenario_detail: OwnershipBreakdown
     baseline_emissions: ScopedEmissions
+    baseline_emissions_detail: ScopedEmissionsBreakdown
     scenario_emissions: ScopedEmissions
+    scenario_emissions_detail: ScopedEmissionsBreakdown
   }
   economic_assumptions_used: Record<string, number>
 }

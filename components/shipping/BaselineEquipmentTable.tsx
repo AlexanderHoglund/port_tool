@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Image from 'next/image'
-import type { TerminalType, BaselineEquipmentEntry, OwnershipType } from '@/lib/types'
+import type { TerminalType, BaselineEquipmentEntry } from '@/lib/types'
 import { createClient } from '@/utils/supabase/client'
 import { usePieceContext } from '@/app/piece/context/PieceContext'
 
@@ -81,8 +81,6 @@ function parseQty(raw: string): number {
   return isNaN(n) || n < 0 ? 0 : n
 }
 
-type OwnerMode = 'port' | 'third_party'
-
 // Editable spec fields in expanded detail
 const EDITABLE_COLUMNS = ['annual_opex_usd', 'kwh_per_teu', 'peak_power_kw'] as const
 type EditableColumn = typeof EDITABLE_COLUMNS[number]
@@ -107,11 +105,6 @@ function EquipmentRow({
   const [expanded, setExpanded] = useState(false)
   const isGridPowered = meta.category === 'grid_powered'
   const totalQty = entry.existing_diesel + entry.existing_electric
-  const ownerMode: OwnerMode = entry.ownership ?? 'port'
-
-  const handleOwnerModeChange = (mode: OwnerMode) => {
-    onChange({ ...entry, ownership: mode === 'port' ? undefined : mode })
-  }
 
   // String state for editable fields (avoids 0-prefix bug)
   const [opexStr, setOpexStr] = useState(String(specs.annual_opex_usd))
@@ -202,26 +195,11 @@ function EquipmentRow({
           {entry.existing_diesel + entry.existing_electric}
         </td>
 
-        {/* Owner column */}
-        <td className="py-2 px-3 text-center bg-[#faf9fc]">
-          {totalQty > 0 ? (
-              <select
-                value={ownerMode}
-                onChange={(e) => handleOwnerModeChange(e.target.value as OwnerMode)}
-                className="w-21 px-2 py-1 rounded border border-[#d5d2e0] text-[11px] text-[#555] bg-[#f8f6fb] hover:border-[#8b82b0] focus:border-[#8b82b0] focus:outline-none cursor-pointer"
-              >
-                <option value="port">Port</option>
-                <option value="third_party">3rd Party</option>
-              </select>
-          ) : (
-            <div className="text-[11px] text-[#ccc]">—</div>
-          )}
-        </td>
       </tr>
 
       {expanded && (
         <tr className="border-b border-gray-100">
-          <td colSpan={7} className="p-0">
+          <td colSpan={6} className="p-0">
             <div className="bg-[#f5f5f5] px-8 py-3 text-xs space-y-2">
               <div className="inline-flex gap-6">
                 <div className="space-y-2">
@@ -352,7 +330,7 @@ function CategoryGroup({
   return (
     <>
       <tr className="cursor-pointer hover:bg-gray-50" onClick={() => setOpen(!open)}>
-        <td colSpan={7} className="py-2.5 px-3 border-b border-gray-200">
+        <td colSpan={6} className="py-2.5 px-3 border-b border-gray-200">
           <div className="flex items-center gap-2">
             <span className="text-[10px] text-[#777] w-4">{open ? '\u25BC' : '\u25B6'}</span>
             <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: color }} />
@@ -529,9 +507,6 @@ export default function BaselineEquipmentTable({
             <th className="text-center py-3 px-3 text-[11px] font-bold uppercase bg-[#eee] text-[#444] w-[10%]">
               Total
             </th>
-            <th className="text-center py-3 px-3 text-[10px] font-bold uppercase bg-[#f0eef5] text-[#7c6fb0] w-[12%]">
-              Owner
-            </th>
           </tr>
         </thead>
         <tbody>
@@ -565,7 +540,6 @@ export default function BaselineEquipmentTable({
             <td className="py-3 px-3 text-center text-sm font-bold text-[#333]">
               {totalDiesel + totalElectric}
             </td>
-            <td className="py-3 px-3 bg-[#faf9fc]" />
           </tr>
         </tfoot>
       </table>

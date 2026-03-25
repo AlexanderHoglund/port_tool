@@ -35,7 +35,8 @@ import {
   loadProject as loadProjectRow,
   syncScenariosWithBaseline,
 } from '@/lib/piece-projects'
-import { decomposePieceTerminals } from '@/lib/piece-reconstitute'
+import { decomposePieceTerminals, reconstitutePieceTerminals } from '@/lib/piece-reconstitute'
+import { computeAssumptionFingerprint } from '@/lib/assumption-hash'
 import { createClient } from '@/utils/supabase/client'
 
 const DEFAULT_PORT_SERVICES_BASELINE: PortServicesBaseline = {
@@ -58,6 +59,7 @@ export default function CalculatorPage() {
     activeAssumptionProfile,
     loadProjectScenario,
     resultsClearedByAssumptions,
+    isResultStale,
     currentAssumptionFingerprint,
     refreshAssumptionFingerprint,
   } = usePieceContext()
@@ -73,6 +75,7 @@ export default function CalculatorPage() {
   const dirtyRef = useRef(false)
   const savingRef = useRef(false)
   const skipTabSwitchRef = useRef(false)
+  const suppressDirtyRef = useRef(false)
 
   // ── Local transient state ──
   const [loading, setLoading] = useState(false)
@@ -145,8 +148,9 @@ export default function CalculatorPage() {
     }
   }, [activeProjectId, activeScenarioId])
 
-  // Mark dirty on any input change
+  // Mark dirty on any input change (suppressed during scenario loads)
   useEffect(() => {
+    if (suppressDirtyRef.current) return
     dirtyRef.current = true
   }, [port, terminals, portServicesBaseline, portServicesScenario])
 
@@ -402,14 +406,16 @@ export default function CalculatorPage() {
       // Sync all scenario configs with the new baseline (also invalidates results)
       if (scenarioList.length > 0) {
         await syncScenariosWithBaseline(activeProjectId, baseline)
-        setResult(null)
         await refreshScenarioList()
 
-        // Reload active scenario to get the synced config
+        // Reload active scenario to get the synced config (suppress dirty marking)
         if (activeScenarioId) {
+          suppressDirtyRef.current = true
           const projectRow = await loadProjectRow(activeProjectId)
           const scenarioRow = await loadScenarioRow(activeScenarioId)
           loadProjectScenario(projectRow, scenarioRow)
+          // Allow React to flush state updates before re-enabling dirty tracking
+          setTimeout(() => { suppressDirtyRef.current = false }, 0)
         }
       }
 
@@ -499,15 +505,18 @@ export default function CalculatorPage() {
     if (activeScenarioId && dirtyRef.current) {
       await autoSaveScenario()
     }
-    // Load new scenario
+    // Load new scenario (suppress dirty marking during load)
     try {
+      suppressDirtyRef.current = true
       const projectRow = await loadProjectRow(activeProjectId!)
       const scenarioRow = await loadScenarioRow(scenarioId)
       // Stay on current tab — skip the useEffect that forces tab switch
       skipTabSwitchRef.current = true
       loadProjectScenario(projectRow, scenarioRow)
       dirtyRef.current = false
+      setTimeout(() => { suppressDirtyRef.current = false }, 0)
     } catch (err) {
+      suppressDirtyRef.current = false
       setError(err instanceof Error ? err.message : 'Failed to switch scenario')
     }
   }, [activeProjectId, activeScenarioId, autoSaveScenario, loadProjectScenario])
@@ -518,13 +527,16 @@ export default function CalculatorPage() {
       await autoSaveScenario()
     }
     try {
+      suppressDirtyRef.current = true
       const projectRow = await loadProjectRow(activeProjectId!)
       const scenarioRow = await loadScenarioRow(scenarioId)
       // Stay on Results tab — skip the useEffect that forces Scenario tab
       skipTabSwitchRef.current = true
       loadProjectScenario(projectRow, scenarioRow)
       dirtyRef.current = false
+      setTimeout(() => { suppressDirtyRef.current = false }, 0)
     } catch (err) {
+      suppressDirtyRef.current = false
       setError(err instanceof Error ? err.message : 'Failed to switch scenario')
     }
   }, [activeProjectId, activeScenarioId, autoSaveScenario, loadProjectScenario])
@@ -598,12 +610,13 @@ export default function CalculatorPage() {
     }
   }, [activeProjectId, activeScenarioId, loadProjectScenario, refreshScenarioList])
 
-  // ── Calculate ──
+  // ── Calculate (recalculates ALL scenarios in the project) ──
   const handleCalculate = async () => {
     setLoading(true)
     setError(null)
 
     try {
+      // 1. Calculate the active scenario with current in-memory data
       const body: PieceCalculationRequest = {
         port,
         terminals,
@@ -623,24 +636,68 @@ export default function CalculatorPage() {
       if (!response.ok || !data.success) {
         setError(data.error || 'Calculation failed')
         setResult(null)
-      } else {
-        setResult(data.result, currentAssumptionFingerprint ?? undefined)
+        setLoading(false)
+        return
+      }
 
-        // Auto-save result to scenario
-        if (activeScenarioId) {
-          const { scenario: scenarioData } = decomposePieceTerminals(terminals, portServicesBaseline, portServicesScenario)
-          await updateScenario(activeScenarioId, {
-            scenario_config: scenarioData,
-            result: data.result,
-            assumption_hash: currentAssumptionFingerprint ?? undefined,
-          })
-          dirtyRef.current = false
-          await refreshScenarioList()
+      const fingerprint = currentAssumptionFingerprint ?? undefined
+      setResult(data.result, fingerprint)
+
+      // 2. Save active scenario result
+      if (activeScenarioId) {
+        const { scenario: scenarioData } = decomposePieceTerminals(terminals, portServicesBaseline, portServicesScenario)
+        await updateScenario(activeScenarioId, {
+          scenario_config: scenarioData,
+          result: data.result,
+          assumption_hash: fingerprint,
+        })
+        dirtyRef.current = false
+      }
+
+      // 3. Recalculate all OTHER scenarios in the project
+      if (activeProjectId) {
+        const project = await loadProjectRow(activeProjectId)
+        const allScenarios = await listScenarios(activeProjectId)
+
+        for (const summary of allScenarios) {
+          if (summary.id === activeScenarioId) continue // already calculated above
+          try {
+            const scenarioRow = await loadScenarioRow(summary.id)
+            const { terminals: scTerminals, portServicesBaseline: scPsbl, portServicesScenario: scPssc } =
+              reconstitutePieceTerminals(project.baseline_config, scenarioRow.scenario_config)
+
+            const scBody: PieceCalculationRequest = {
+              port: project.port_config,
+              terminals: scTerminals,
+              port_services_baseline: scPsbl ?? undefined,
+              port_services_scenario: scPssc ?? undefined,
+              assumption_profile: scenarioRow.assumption_profile,
+            }
+
+            const scResponse = await fetch('/api/piece/calculate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(scBody),
+            })
+            const scData = await scResponse.json()
+
+            if (scResponse.ok && scData.success) {
+              const scFingerprint = await computeAssumptionFingerprint(scenarioRow.assumption_profile)
+              await updateScenario(summary.id, {
+                result: scData.result,
+                assumption_hash: scFingerprint,
+              })
+            }
+          } catch {
+            // Silently skip failed scenarios — active scenario result is already saved
+          }
         }
 
-        // Auto-switch to Results tab
-        setActiveTab('results')
+        await refreshScenarioList()
       }
+
+      // 4. Auto-switch to Results tab
+      setActiveTab('results')
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'An error occurred'
       setError(message)
@@ -667,6 +724,8 @@ export default function CalculatorPage() {
           hasScenarioChanges(t.scenario_equipment) ||
           t.berths.length > 0)
     )
+
+  const hasUpToDateResults = result !== null && !isResultStale && !resultsClearedByAssumptions
 
   const isBaselineComplete = terminals.some(t =>
     (t.terminal_type !== 'container' || t.annual_teu > 0) &&
@@ -1022,11 +1081,15 @@ export default function CalculatorPage() {
               <div className="mt-8 flex flex-col items-center gap-2">
                 <button
                   onClick={handleCalculate}
-                  disabled={loading || !canCalculate}
+                  disabled={loading || !canCalculate || hasUpToDateResults}
                   className="text-white font-medium text-sm py-3 px-12 rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-[#414141] hover:bg-[#585858]"
                 >
                   {loading ? 'Calculating...' : 'Calculate PIECE Analysis'}
                 </button>
+
+                {hasUpToDateResults && (
+                  <p className="text-[10px] text-[#8c8c8c]">Results are up to date</p>
+                )}
 
                 {resultsClearedByAssumptions && (
                   <p className="text-xs text-[#bc8e54] font-medium">

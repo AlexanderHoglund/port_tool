@@ -1,6 +1,6 @@
 'use client'
 
-import type { BerthDefinition, OwnershipType, TerminalType } from '@/lib/types'
+import type { BerthDefinition, TerminalType } from '@/lib/types'
 
 type Props = {
   berths: BerthDefinition[]
@@ -104,7 +104,7 @@ export default function BerthConfigPanel({ berths, terminalType, onChange }: Pro
                   <input
                     type="checkbox"
                     checked={berth.ops_existing ?? false}
-                    onChange={(e) => updateBerth(berth.id, { ops_existing: e.target.checked, ...(!e.target.checked ? { ops_ownership: undefined } : {}) })}
+                    onChange={(e) => updateBerth(berth.id, { ops_existing: e.target.checked })}
                     className="w-3.5 h-3.5 text-[#1565c0] rounded border-gray-300 focus:ring-[#1565c0]"
                   />
                   <span className="text-[#0d47a1]">OPS Existing</span>
@@ -113,41 +113,11 @@ export default function BerthConfigPanel({ berths, terminalType, onChange }: Pro
                   <input
                     type="checkbox"
                     checked={berth.dc_existing ?? false}
-                    onChange={(e) => updateBerth(berth.id, { dc_existing: e.target.checked, ...(!e.target.checked ? { dc_ownership: undefined } : {}) })}
+                    onChange={(e) => updateBerth(berth.id, { dc_existing: e.target.checked })}
                     className="w-3.5 h-3.5 text-[#e65100] rounded border-gray-300 focus:ring-[#e65100]"
                   />
                   <span className="text-[#bf360c]">DC Existing</span>
                 </label>
-                {(berth.ops_existing || berth.dc_existing) && (
-                  <div className="flex items-center gap-3 ml-3 pl-3 border-l border-[#e8e5f0]">
-                    {berth.ops_existing && (
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-semibold uppercase text-[#7c6fb0]">OPS</span>
-                        <select
-                          value={berth.ops_ownership ?? 'port'}
-                          onChange={(e) => updateBerth(berth.id, { ops_ownership: e.target.value as OwnershipType })}
-                          className="w-21 px-2 py-1 rounded border border-[#d5d2e0] text-[11px] text-[#555] bg-[#f8f6fb] hover:border-[#8b82b0] focus:border-[#8b82b0] focus:outline-none cursor-pointer"
-                        >
-                          <option value="port">Port</option>
-                          <option value="third_party">3rd Party</option>
-                        </select>
-                      </div>
-                    )}
-                    {berth.dc_existing && (
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-semibold uppercase text-[#7c6fb0]">DC</span>
-                        <select
-                          value={berth.dc_ownership ?? 'port'}
-                          onChange={(e) => updateBerth(berth.id, { dc_ownership: e.target.value as OwnershipType })}
-                          className="w-21 px-2 py-1 rounded border border-[#d5d2e0] text-[11px] text-[#555] bg-[#f8f6fb] hover:border-[#8b82b0] focus:border-[#8b82b0] focus:outline-none cursor-pointer"
-                        >
-                          <option value="port">Port</option>
-                          <option value="third_party">3rd Party</option>
-                        </select>
-                      </div>
-                    )}
-                  </div>
-                )}
                 <button
                   type="button"
                   onClick={() => removeBerth(berth.id)}

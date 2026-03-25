@@ -184,14 +184,6 @@ function validateBerthDefinition(
     return { ok: false, error: `${prefix}.max_vessel_segment_key must be a non-empty string.` }
   }
 
-  // Optional ownership fields
-  if (b.ops_ownership !== undefined && !VALID_OWNERSHIP_TYPES.includes(b.ops_ownership as OwnershipType)) {
-    return { ok: false, error: `${prefix}.ops_ownership must be 'port' or 'third_party'.` }
-  }
-  if (b.dc_ownership !== undefined && !VALID_OWNERSHIP_TYPES.includes(b.dc_ownership as OwnershipType)) {
-    return { ok: false, error: `${prefix}.dc_ownership must be 'port' or 'third_party'.` }
-  }
-
   return {
     ok: true,
     data: {
@@ -201,8 +193,6 @@ function validateBerthDefinition(
       max_vessel_segment_key: b.max_vessel_segment_key,
       ops_existing: !!b.ops_existing,
       dc_existing: !!b.dc_existing,
-      ops_ownership: b.ops_ownership as OwnershipType | undefined,
-      dc_ownership: b.dc_ownership as OwnershipType | undefined,
     },
   }
 }
@@ -267,16 +257,9 @@ function validateBaselineEquipment(
       return { ok: false, error: `${prefix}.${key}.existing_electric must be a non-negative number.` }
     }
 
-    // Optional ownership
-    const ownership = entry.ownership
-    if (ownership !== undefined && ownership !== 'port' && ownership !== 'third_party') {
-      return { ok: false, error: `${prefix}.${key}.ownership must be 'port' or 'third_party'.` }
-    }
-
     result[key] = {
       existing_diesel: diesel,
       existing_electric: electric,
-      ownership: ownership as 'port' | 'third_party' | undefined,
     }
   }
 
@@ -310,16 +293,9 @@ function validateScenarioEquipment(
       return { ok: false, error: `${prefix}.${key}.num_to_add must be a non-negative number.` }
     }
 
-    // Optional ownership for new additions
-    const addOwnership = entry.add_ownership
-    if (addOwnership !== undefined && addOwnership !== 'port' && addOwnership !== 'third_party') {
-      return { ok: false, error: `${prefix}.${key}.add_ownership must be 'port' or 'third_party'.` }
-    }
-
     result[key] = {
       num_to_convert: convert,
       num_to_add: add,
-      add_ownership: addOwnership as 'port' | 'third_party' | undefined,
     }
   }
 
@@ -378,6 +354,10 @@ function validateTerminal(
   }
   if (typeof t.terminal_type !== 'string' || !VALID_TERMINAL_TYPES.includes(t.terminal_type as TerminalType)) {
     return { ok: false, error: `${prefix}.terminal_type must be one of: ${VALID_TERMINAL_TYPES.join(', ')}` }
+  }
+  // Optional terminal-level ownership
+  if (t.ownership !== undefined && !VALID_OWNERSHIP_TYPES.includes(t.ownership as OwnershipType)) {
+    return { ok: false, error: `${prefix}.ownership must be 'port' or 'third_party'.` }
   }
   if (typeof t.annual_teu !== 'number' || t.annual_teu < 0) {
     return { ok: false, error: `${prefix}.annual_teu must be non-negative.` }
@@ -463,21 +443,6 @@ function validateTerminal(
     }
   }
 
-  // Optional charger ownership
-  let chargerOwnership: Record<string, 'port' | 'third_party'> | undefined
-  if (t.charger_ownership !== undefined) {
-    if (typeof t.charger_ownership !== 'object' || t.charger_ownership === null) {
-      return { ok: false, error: `${prefix}.charger_ownership must be an object if provided.` }
-    }
-    chargerOwnership = {}
-    for (const [key, val] of Object.entries(t.charger_ownership as Record<string, unknown>)) {
-      if (val !== 'port' && val !== 'third_party') {
-        return { ok: false, error: `${prefix}.charger_ownership.${key} must be 'port' or 'third_party'.` }
-      }
-      chargerOwnership[key] = val
-    }
-  }
-
   // Optional cable length
   let cableLengthM: number | undefined
   if (t.cable_length_m !== undefined) {
@@ -487,23 +452,41 @@ function validateTerminal(
     cableLengthM = t.cable_length_m
   }
 
+  // Optional OPS/DC calls per year
+  let opsCallsPerYear: number | undefined
+  if (t.ops_calls_per_year !== undefined) {
+    if (typeof t.ops_calls_per_year !== 'number' || t.ops_calls_per_year < 0) {
+      return { ok: false, error: `${prefix}.ops_calls_per_year must be a non-negative number if provided.` }
+    }
+    opsCallsPerYear = t.ops_calls_per_year
+  }
+  let dcCallsPerYear: number | undefined
+  if (t.dc_calls_per_year !== undefined) {
+    if (typeof t.dc_calls_per_year !== 'number' || t.dc_calls_per_year < 0) {
+      return { ok: false, error: `${prefix}.dc_calls_per_year must be a non-negative number if provided.` }
+    }
+    dcCallsPerYear = t.dc_calls_per_year
+  }
+
   return {
     ok: true,
     data: {
       id: t.id,
       name: t.name,
       terminal_type: t.terminal_type as TerminalType,
+      ownership: t.ownership as OwnershipType | undefined,
       annual_teu: t.annual_teu,
       annual_passengers: typeof t.annual_passengers === 'number' ? t.annual_passengers : undefined,
       annual_ceu: typeof t.annual_ceu === 'number' ? t.annual_ceu : undefined,
       vessel_calls: vesselCalls,
+      ops_calls_per_year: opsCallsPerYear,
+      dc_calls_per_year: dcCallsPerYear,
       berths,
       berth_scenarios: berthScenarios,
       baseline_equipment: baselineValidation.data,
       scenario_equipment: scenarioValidation.data,
       buildings_lighting: buildingsLighting,
       charger_overrides: chargerOverrides,
-      charger_ownership: chargerOwnership,
       cable_length_m: cableLengthM,
     },
   }

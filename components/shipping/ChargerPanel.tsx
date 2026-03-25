@@ -1,7 +1,5 @@
 'use client'
 
-import type { OwnershipType } from '@/lib/types'
-
 // EVSE charger configuration from PIECE data
 const EVSE_CONFIG = [
   { evse_key: 'evse_agv', equipment_key: 'agv', display_name: 'AGV Charger', power_kw: 200, units_per_charger: 15, capex_usd: 110000 },
@@ -14,12 +12,10 @@ const EVSE_CONFIG = [
 type Props = {
   scenarioEquipment: Record<string, number>
   chargerOverrides?: Record<string, number>
-  chargerOwnership?: Record<string, OwnershipType>
   onChange: (overrides: Record<string, number>) => void
-  onOwnershipChange: (ownership: Record<string, OwnershipType>) => void
 }
 
-export default function ChargerPanel({ scenarioEquipment, chargerOverrides, chargerOwnership, onChange, onOwnershipChange }: Props) {
+export default function ChargerPanel({ scenarioEquipment, chargerOverrides, onChange }: Props) {
   // Calculate required chargers
   const chargerData = EVSE_CONFIG.map((evse) => {
     const equipmentCount = scenarioEquipment[evse.equipment_key] ?? 0
@@ -81,7 +77,6 @@ export default function ChargerPanel({ scenarioEquipment, chargerOverrides, char
               <th className="text-center py-2 px-3 text-[10px] font-bold uppercase text-[#8c8c8c]">Final</th>
               <th className="text-right py-2 px-3 text-[10px] font-bold uppercase text-[#8c8c8c]">Power (kW)</th>
               <th className="text-right py-2 px-3 text-[10px] font-bold uppercase text-[#8c8c8c]">CAPEX</th>
-              <th className="text-center py-2 px-3 text-[10px] font-bold uppercase text-[#7c6fb0] bg-[#f0eef5]">Owner</th>
             </tr>
           </thead>
           <tbody>
@@ -111,25 +106,6 @@ export default function ChargerPanel({ scenarioEquipment, chargerOverrides, char
                 <td className="py-2 px-3 text-center font-semibold text-[#3c5e86]">{c.final}</td>
                 <td className="py-2 px-3 text-right text-[#585858]">{(c.totalPower).toLocaleString()}</td>
                 <td className="py-2 px-3 text-right text-[#585858]">${(c.totalCapex / 1000).toFixed(0)}K</td>
-                <td className="py-2 px-3 text-center bg-[#faf9fc]">
-                  <select
-                    value={chargerOwnership?.[c.evse_key] ?? 'port'}
-                    onChange={(e) => {
-                      const mode = e.target.value as OwnershipType
-                      const updated = { ...chargerOwnership }
-                      if (mode === 'port') {
-                        delete updated[c.evse_key]
-                      } else {
-                        updated[c.evse_key] = mode
-                      }
-                      onOwnershipChange(updated)
-                    }}
-                    className="w-21 px-2 py-1 rounded border border-[#d5d2e0] text-[11px] text-[#555] bg-[#f8f6fb] hover:border-[#8b82b0] focus:border-[#8b82b0] focus:outline-none cursor-pointer"
-                  >
-                    <option value="port">Port</option>
-                    <option value="third_party">3rd Party</option>
-                  </select>
-                </td>
               </tr>
             ))}
           </tbody>
@@ -139,7 +115,6 @@ export default function ChargerPanel({ scenarioEquipment, chargerOverrides, char
               <td className="py-2 px-3 text-center text-[#3c5e86]">{totals.chargers}</td>
               <td className="py-2 px-3 text-right text-[#414141]">{totals.power.toLocaleString()}</td>
               <td className="py-2 px-3 text-right text-[#414141]">${(totals.capex / 1000000).toFixed(2)}M</td>
-              <td className="py-2 px-3 bg-[#faf9fc]"></td>
             </tr>
           </tfoot>
         </table>

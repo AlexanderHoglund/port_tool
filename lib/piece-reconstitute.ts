@@ -13,6 +13,7 @@ import type {
   BaselineTerminalConfig,
   BerthDefinition,
   BerthVesselCall,
+  OwnershipType,
   PieceTerminalConfig,
   PortServicesBaseline,
   PortServicesScenario,
@@ -61,6 +62,23 @@ export function reconstitutePieceTerminals(
     // Backward compat: old scenarios may still have throughput + vessel_calls_by_berth
     const legacySt = st as Record<string, unknown> | undefined
 
+    // Backward compat: derive terminal-level ownership from legacy per-item fields
+    let ownership: OwnershipType | undefined = bt.ownership
+    if (!ownership) {
+      // Legacy data: scan equipment entries for majority ownership
+      const entries = Object.values(bt.baseline_equipment)
+      const legacyEntries = entries as Array<Record<string, unknown>>
+      let thirdPartyCount = 0
+      let totalCount = 0
+      for (const entry of legacyEntries) {
+        if (entry.ownership) {
+          totalCount++
+          if (entry.ownership === 'third_party') thirdPartyCount++
+        }
+      }
+      ownership = totalCount > 0 && thirdPartyCount > totalCount / 2 ? 'third_party' : 'port'
+    }
+
     // Berths are simple — no vessel_calls to merge
     const berths: BerthDefinition[] = bt.berths.map((bb) => ({
       id: bb.id,
@@ -69,8 +87,6 @@ export function reconstitutePieceTerminals(
       max_vessel_segment_key: bb.max_vessel_segment_key,
       ops_existing: bb.ops_existing,
       dc_existing: bb.dc_existing,
-      ops_ownership: bb.ops_ownership,
-      dc_ownership: bb.dc_ownership,
     }))
 
     // Vessel calls: prefer baseline, fall back to old scenario vessel_calls_by_berth
@@ -84,18 +100,21 @@ export function reconstitutePieceTerminals(
       id: bt.id,
       name: bt.name,
       terminal_type: bt.terminal_type,
+      ownership,
       // Throughput: prefer baseline, fall back to old scenario
       annual_teu: bt.annual_teu ?? (legacySt?.annual_teu as number) ?? 0,
       annual_passengers: bt.annual_passengers ?? (legacySt?.annual_passengers as number | undefined),
       annual_ceu: bt.annual_ceu ?? (legacySt?.annual_ceu as number | undefined),
       vessel_calls: vesselCalls,
+      // OPS/DC calls: scenario overrides baseline if defined
+      ops_calls_per_year: st?.ops_calls_per_year ?? bt.ops_calls_per_year,
+      dc_calls_per_year: st?.dc_calls_per_year ?? bt.dc_calls_per_year,
       baseline_equipment: bt.baseline_equipment,
       berths,
       cable_length_m: bt.cable_length_m,
       scenario_equipment: st?.scenario_equipment ?? {},
       berth_scenarios: st?.berth_scenarios ?? [],
       charger_overrides: st?.charger_overrides,
-      charger_ownership: st?.charger_ownership,
     }
   })
 
@@ -119,6 +138,7 @@ export function decomposePieceTerminals(
       id: t.id,
       name: t.name,
       terminal_type: t.terminal_type,
+      ownership: t.ownership,
       berths: t.berths,
       baseline_equipment: t.baseline_equipment,
       cable_length_m: t.cable_length_m,
@@ -127,6 +147,8 @@ export function decomposePieceTerminals(
       annual_passengers: t.annual_passengers,
       annual_ceu: t.annual_ceu,
       vessel_calls: t.vessel_calls ?? [],
+      ops_calls_per_year: t.ops_calls_per_year,
+      dc_calls_per_year: t.dc_calls_per_year,
     })
 
     scenarioTerminals.push({
@@ -134,7 +156,8 @@ export function decomposePieceTerminals(
       scenario_equipment: t.scenario_equipment,
       berth_scenarios: t.berth_scenarios,
       charger_overrides: t.charger_overrides,
-      charger_ownership: t.charger_ownership,
+      ops_calls_per_year: t.ops_calls_per_year,
+      dc_calls_per_year: t.dc_calls_per_year,
     })
   }
 

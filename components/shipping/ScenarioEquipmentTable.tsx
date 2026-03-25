@@ -285,30 +285,11 @@ function EquipmentRow({
           )}
         </td>
 
-        {/* Owner column — inherits baseline ownership as default */}
-        <td className="py-2 px-3 text-center bg-[#faf9fc]">
-          {(baselineDiesel + baselineElectric > 0 || toAdd > 0) ? (
-            <select
-              value={scenarioEntry.add_ownership ?? baselineEntry.ownership ?? 'port'}
-              onChange={(e) => {
-                const mode = e.target.value as 'port' | 'third_party'
-                const inherited = baselineEntry.ownership ?? 'port'
-                onChange({ ...scenarioEntry, add_ownership: mode === inherited ? undefined : mode })
-              }}
-              className="w-21 px-2 py-1 rounded border border-[#d5d2e0] text-[11px] text-[#555] bg-[#f8f6fb] hover:border-[#8b82b0] focus:border-[#8b82b0] focus:outline-none cursor-pointer"
-            >
-              <option value="port">Port</option>
-              <option value="third_party">3rd Party</option>
-            </select>
-          ) : (
-            <div className="text-[11px] text-[#ccc]">—</div>
-          )}
-        </td>
       </tr>
 
       {expanded && (
         <tr className="border-b border-gray-100">
-          <td colSpan={8} className="p-0">
+          <td colSpan={7} className="p-0">
             <div className="bg-[#f5f5f5] px-8 py-3 text-xs space-y-2">
               <div className="inline-flex gap-6">
                 <div className="space-y-2">
@@ -385,7 +366,7 @@ function CategoryGroup({
   return (
     <>
       <tr className="cursor-pointer hover:bg-gray-50" onClick={() => setOpen(!open)}>
-        <td colSpan={8} className="py-2.5 px-3 border-b border-gray-200">
+        <td colSpan={7} className="py-2.5 px-3 border-b border-gray-200">
           <div className="flex items-center gap-2">
             <span className="text-[10px] text-[#777] w-4">{open ? '\u25BC' : '\u25B6'}</span>
             <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: color }} />
@@ -595,9 +576,6 @@ export default function ScenarioEquipmentTable({
               Scenario Fleet
               <span className="block text-[9px] font-normal text-[#2d5480]">(resulting)</span>
             </th>
-            <th className="text-center py-3 px-3 text-[10px] font-bold uppercase bg-[#f0eef5] text-[#7c6fb0]">
-              Owner
-            </th>
           </tr>
           <tr className="border-b border-gray-200">
             <th className="py-1 px-3 bg-white"></th>
@@ -607,7 +585,6 @@ export default function ScenarioEquipmentTable({
             <th className="py-1 px-3 bg-[#f1f8e9]"></th>
             <th className="py-1 px-3 text-center text-[10px] font-semibold text-[#7a5c10] bg-[#f0f0f0]">Diesel</th>
             <th className="py-1 px-3 text-center text-[10px] font-semibold text-[#2d5480] bg-[#f0f0f0]">Electric</th>
-            <th className="py-1 px-3 bg-[#faf9fc]"></th>
           </tr>
         </thead>
         <tbody>
@@ -651,7 +628,6 @@ export default function ScenarioEquipmentTable({
             <td className="py-3 px-3 text-center text-sm font-bold text-[#2d5480] bg-[#f0f0f0]">
               {scenarioElectric}
             </td>
-            <td className="py-3 px-3 bg-[#faf9fc]" />
           </tr>
         </tfoot>
       </table>

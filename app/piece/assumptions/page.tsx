@@ -3,12 +3,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Image from 'next/image'
 import { createBrowserClient } from '@supabase/ssr'
-import type { PieceAssumptionOverride } from '@/lib/types'
+import type { PieceAssumptionOverride, PieceCalculationRequest } from '@/lib/types'
 import { ASSUMPTION_TABLES, HIDDEN_COLUMNS, NON_EDITABLE_COLUMNS, type AssumptionTableKey } from '@/lib/constants'
 import { usePieceContext } from '../context/PieceContext'
+import { loadProject, listScenarios, loadScenario, updateScenario } from '@/lib/piece-projects'
+import { reconstitutePieceTerminals } from '@/lib/piece-reconstitute'
+import { computeAssumptionFingerprint } from '@/lib/assumption-hash'
 
 export default function AssumptionsPage() {
-  const { refreshAssumptionFingerprint, activeAssumptionProfile, activeScenarioName } = usePieceContext()
+  const { refreshAssumptionFingerprint, activeAssumptionProfile, activeScenarioName, activeProjectId, activeProjectName, activeScenarioId, setResult, currentAssumptionFingerprint } = usePieceContext()
   const PROFILE_NAME = activeAssumptionProfile
   const [activeTable, setActiveTable] = useState<AssumptionTableKey>('economic_assumptions')
   const [data, setData] = useState<Record<string, unknown>[]>([])
@@ -19,6 +22,10 @@ export default function AssumptionsPage() {
   const [editValue, setEditValue] = useState('')
   const [saving, setSaving] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // Recalculate all scenarios state
+  const [recalculating, setRecalculating] = useState(false)
+  const [recalcResult, setRecalcResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -230,6 +237,82 @@ export default function AssumptionsPage() {
   }
 
   const totalOverrides = Object.values(overrideCounts).reduce((a, b) => a + b, 0)
+
+  // ── Recalculate all scenarios ──
+  const handleRecalculateAll = async () => {
+    if (!activeProjectId) return
+    setRecalculating(true)
+    setRecalcResult(null)
+
+    try {
+      // Load project baseline
+      const project = await loadProject(activeProjectId)
+      const scenarios = await listScenarios(activeProjectId)
+
+      let successCount = 0
+      let errorCount = 0
+
+      for (const summary of scenarios) {
+        try {
+          const scenarioRow = await loadScenario(summary.id)
+          const { terminals, portServicesBaseline, portServicesScenario } = reconstitutePieceTerminals(
+            project.baseline_config,
+            scenarioRow.scenario_config,
+          )
+
+          const body: PieceCalculationRequest = {
+            port: project.port_config,
+            terminals,
+            port_services_baseline: portServicesBaseline ?? undefined,
+            port_services_scenario: portServicesScenario ?? undefined,
+            assumption_profile: scenarioRow.assumption_profile,
+          }
+
+          const response = await fetch('/api/piece/calculate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          })
+
+          const data = await response.json()
+
+          if (response.ok && data.success) {
+            // Compute fingerprint for this scenario's profile
+            const fingerprint = await computeAssumptionFingerprint(scenarioRow.assumption_profile)
+            await updateScenario(summary.id, {
+              result: data.result,
+              assumption_hash: fingerprint,
+            })
+
+            // If this is the active scenario, update the context result
+            if (summary.id === activeScenarioId) {
+              setResult(data.result, fingerprint)
+            }
+
+            successCount++
+          } else {
+            errorCount++
+          }
+        } catch {
+          errorCount++
+        }
+      }
+
+      // Refresh the context fingerprint so stale detection sees the new hash
+      await refreshAssumptionFingerprint()
+
+      if (errorCount === 0) {
+        setRecalcResult({ type: 'success', message: `Recalculated ${successCount} scenario${successCount !== 1 ? 's' : ''} successfully.` })
+      } else {
+        setRecalcResult({ type: 'error', message: `${successCount} succeeded, ${errorCount} failed.` })
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to recalculate'
+      setRecalcResult({ type: 'error', message })
+    }
+
+    setRecalculating(false)
+  }
 
   return (
     <>
@@ -465,6 +548,36 @@ export default function AssumptionsPage() {
                   parentheses. Use &quot;Reset&quot; to revert changes. Default database values are never modified.
                 </p>
               </div>
+
+              {/* Recalculate Project Button */}
+              {activeProjectId && (
+                <div className="mt-6 rounded-xl border border-gray-200 bg-white px-6 py-5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-semibold text-[#414141]">
+                        Recalculate Project
+                      </h3>
+                      <p className="text-xs text-[#8c8c8c] mt-0.5">
+                        Recalculate all scenarios for <span className="font-medium text-[#555]">{activeProjectName}</span> using current assumptions.
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleRecalculateAll}
+                      disabled={recalculating}
+                      className="px-6 py-2.5 rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-[#3c5e86] hover:bg-[#2d4a6e]"
+                    >
+                      {recalculating ? 'Recalculating...' : 'Recalculate All Scenarios'}
+                    </button>
+                  </div>
+                  {recalcResult && (
+                    <div className={`mt-3 text-xs font-medium ${
+                      recalcResult.type === 'success' ? 'text-green-700' : 'text-red-600'
+                    }`}>
+                      {recalcResult.message}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>

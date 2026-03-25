@@ -20,6 +20,17 @@ const DIAMOND_BUTTONS = [
   { href: '/tutorial', label: 'Tutorial', color: '#8b6baa' },
 ]
 
+/** Lighten a hex color by mixing with white. Amount 0-1. */
+function lightenColor(hex: string, amount: number): string {
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  const lr = Math.round(r + (255 - r) * amount)
+  const lg = Math.round(g + (255 - g) * amount)
+  const lb = Math.round(b + (255 - b) * amount)
+  return `#${lr.toString(16).padStart(2, '0')}${lg.toString(16).padStart(2, '0')}${lb.toString(16).padStart(2, '0')}`
+}
+
 export default function SiteNavWrapper() {
   const pathname = usePathname()
   const [scrolled, setScrolled] = useState(false)
@@ -75,71 +86,48 @@ export default function SiteNavWrapper() {
             </div>
           </Link>
 
-          {/* Nav links */}
-          <div className="hidden md:flex items-center gap-1">
-            {NAV_LINKS.map((item) => {
+          {/* Diamond button nav — colored rhombus indicators */}
+          <div className="hidden md:flex items-center gap-1 divide-x divide-gray-200/50 rounded-xl overflow-hidden">
+            {DIAMOND_BUTTONS.map((item) => {
               const active = isActive(item.href)
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`px-3.5 py-2 text-[13px] transition-colors duration-300 ${
-                    scrolled
-                      ? active
-                        ? 'text-white font-medium'
-                        : 'text-white/50 hover:text-white'
-                      : active
-                        ? 'text-[#2c3e50] font-medium'
-                        : 'text-[#9ca3af] hover:text-[#2c3e50]'
+                  className={`group flex items-center gap-2 px-3.5 py-2 transition-colors ${
+                    active
+                      ? scrolled ? 'bg-white/10' : 'bg-gray-50'
+                      : scrolled ? 'hover:bg-white/5' : 'hover:bg-gray-50/60'
                   }`}
                 >
-                  {item.label}
+                  <span
+                    className={`w-2.5 h-2.5 rotate-45 rounded-[2px] shrink-0 transition-transform group-hover:scale-110 ${
+                      active ? 'scale-110' : ''
+                    }`}
+                    style={{
+                      backgroundColor: scrolled
+                        ? active ? lightenColor(item.color, 0.7) : lightenColor(item.color, 0.5)
+                        : active ? item.color : `${item.color}40`,
+                      border: `1.5px solid ${scrolled
+                        ? lightenColor(item.color, 0.7)
+                        : item.color}`,
+                    }}
+                  />
+                  <span
+                    className={`text-[11px] uppercase tracking-[0.08em] font-medium whitespace-nowrap transition-colors duration-300 ${
+                      scrolled
+                        ? active ? 'text-white' : 'text-white/80 group-hover:text-white'
+                        : active ? 'text-[#2c3e50]' : 'text-[#9ca3af] group-hover:text-[#6b7280]'
+                    }`}
+                  >
+                    {item.label}
+                  </span>
                 </Link>
               )
             })}
           </div>
         </div>
       </nav>
-
-      {/* Diamond button row — colored rhombus indicators */}
-      <div className="max-w-[700px] mx-auto mt-3 bg-white rounded-2xl border border-gray-200 shadow-sm">
-        <div className="flex items-center justify-center divide-x divide-gray-200">
-          {DIAMOND_BUTTONS.map((item) => {
-            const active = isActive(item.href)
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`group flex-1 flex items-center justify-center gap-3 px-4 py-3.5 transition-colors first:rounded-l-2xl last:rounded-r-2xl ${
-                  active
-                    ? 'bg-gray-50'
-                    : 'hover:bg-gray-50/60'
-                }`}
-              >
-                {/* Diamond / rhombus */}
-                <span
-                  className={`w-3 h-3 rotate-45 rounded-[2px] shrink-0 transition-transform group-hover:scale-110 ${
-                    active ? 'scale-110' : ''
-                  }`}
-                  style={{
-                    backgroundColor: active ? item.color : `${item.color}40`,
-                    border: `1.5px solid ${item.color}`,
-                  }}
-                />
-                <span
-                  className={`text-[11px] uppercase tracking-[0.1em] font-medium whitespace-nowrap transition-colors ${
-                    active
-                      ? 'text-[#2c3e50]'
-                      : 'text-[#9ca3af] group-hover:text-[#6b7280]'
-                  }`}
-                >
-                  {item.label}
-                </span>
-              </Link>
-            )
-          })}
-        </div>
-      </div>
     </header>
   )
 }

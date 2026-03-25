@@ -208,6 +208,8 @@ export function PieceProvider({ children }: { children: ReactNode }) {
   // Track whether an input changed since last calculation
   const inputGeneration = useRef(0)
   const resultGeneration = useRef(0)
+  // State-based counter to trigger stale detection effect when inputs change
+  const [inputVersion, setInputVersion] = useState(0)
 
   // ── Stale / assumption-clear detection ──
 
@@ -234,19 +236,21 @@ export function PieceProvider({ children }: { children: ReactNode }) {
       return
     }
     setIsResultStale(false)
-  }, [result, resultFingerprint, currentFingerprint])
+  }, [result, resultFingerprint, currentFingerprint, inputVersion])
 
   // ── Wrapped setters that track input changes ──
 
   const setPort = useCallback((p: PortConfig) => {
     setPortRaw(p)
     inputGeneration.current++
+    setInputVersion((v) => v + 1)
   }, [])
 
   const setTerminals: Dispatch<SetStateAction<PieceTerminalConfig[]>> = useCallback(
     (action: SetStateAction<PieceTerminalConfig[]>) => {
       setTerminalsRaw(action)
       inputGeneration.current++
+      setInputVersion((v) => v + 1)
     },
     [],
   )
@@ -254,11 +258,13 @@ export function PieceProvider({ children }: { children: ReactNode }) {
   const setPortServicesBaseline = useCallback((ps: PortServicesBaseline | null) => {
     setPortServicesBaselineRaw(ps)
     inputGeneration.current++
+    setInputVersion((v) => v + 1)
   }, [])
 
   const setPortServicesScenario = useCallback((ps: PortServicesScenario | null) => {
     setPortServicesScenarioRaw(ps)
     inputGeneration.current++
+    setInputVersion((v) => v + 1)
   }, [])
 
   const setResult = useCallback((r: PiecePortResult | null, fingerprint?: string) => {

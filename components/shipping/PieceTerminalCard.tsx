@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react'
 import type {
   PieceTerminalConfig,
   TerminalType,
+  OwnershipType,
   BuildingsLightingConfig,
 } from '@/lib/types'
 import BerthConfigPanel from './BerthConfigPanel'
@@ -212,6 +213,30 @@ export default function PieceTerminalCard({
           </span>
         )}
 
+        {/* Terminal ownership (baseline: editable, scenario: read-only badge) */}
+        {isBaseline ? (
+          <select
+            value={terminal.ownership ?? 'port'}
+            onChange={(e) => {
+              e.stopPropagation()
+              onChange({ ...terminal, ownership: e.target.value as OwnershipType })
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className="px-2 py-1 rounded border border-gray-300 text-xs font-semibold text-[#7c6fb0] bg-white focus:border-[#7c6fb0] focus:outline-none cursor-pointer"
+          >
+            <option value="port">Port-owned</option>
+            <option value="third_party">3rd Party</option>
+          </select>
+        ) : (
+          <span className={`text-[10px] px-2 py-0.5 rounded uppercase font-semibold ${
+            (terminal.ownership ?? 'port') === 'port'
+              ? 'bg-purple-100 text-purple-800'
+              : 'bg-orange-100 text-orange-800'
+          }`}>
+            {(terminal.ownership ?? 'port') === 'port' ? 'Port-owned' : '3rd Party'}
+          </span>
+        )}
+
         {/* Mode badge */}
         <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${
           isBaseline
@@ -335,6 +360,12 @@ export default function PieceTerminalCard({
                   vesselCalls={terminal.vessel_calls ?? []}
                   onTeuChange={(v) => onChange({ ...terminal, annual_teu: v })}
                   onVesselCallsChange={(calls) => onChange({ ...terminal, vessel_calls: calls })}
+                  opsCallsPerYear={terminal.ops_calls_per_year ?? 0}
+                  dcCallsPerYear={terminal.dc_calls_per_year ?? 0}
+                  onOpsCallsChange={(v) => onChange({ ...terminal, ops_calls_per_year: v })}
+                  onDcCallsChange={(v) => onChange({ ...terminal, dc_calls_per_year: v })}
+                  hasOps={terminal.berths.some((b) => b.ops_existing)}
+                  hasDc={terminal.berths.some((b) => b.dc_existing)}
                 />
               </CollapsibleSection>
             </>
@@ -366,6 +397,42 @@ export default function PieceTerminalCard({
                   onBerthChange={(berths) => onChange({ ...terminal, berths })}
                 />
               </CollapsibleSection>
+
+              {/* Operations — OPS/DC call counts (scenario override) */}
+              {(terminal.berths.some((b) => b.ops_existing) ||
+                terminal.berth_scenarios?.some((s) => s.ops_enabled) ||
+                terminal.berths.some((b) => b.dc_existing) ||
+                terminal.berth_scenarios?.some((s) => s.dc_enabled)) && (
+                <CollapsibleSection
+                  title="Operations"
+                  badge={
+                    (terminal.ops_calls_per_year ?? 0) > 0 || (terminal.dc_calls_per_year ?? 0) > 0
+                      ? `${(terminal.ops_calls_per_year ?? 0).toLocaleString()} OPS + ${(terminal.dc_calls_per_year ?? 0).toLocaleString()} DC calls/yr`
+                      : undefined
+                  }
+                  defaultOpen={false}
+                  status={
+                    (terminal.ops_calls_per_year ?? 0) > 0 || (terminal.dc_calls_per_year ?? 0) > 0
+                      ? 'modified'
+                      : 'alterable'
+                  }
+                >
+                  <OperationsPanel
+                    terminalType={terminal.terminal_type}
+                    annualTeu={terminal.annual_teu}
+                    vesselCalls={terminal.vessel_calls ?? []}
+                    onTeuChange={() => {}}
+                    onVesselCallsChange={() => {}}
+                    opsCallsPerYear={terminal.ops_calls_per_year ?? 0}
+                    dcCallsPerYear={terminal.dc_calls_per_year ?? 0}
+                    onOpsCallsChange={(v) => onChange({ ...terminal, ops_calls_per_year: v })}
+                    onDcCallsChange={(v) => onChange({ ...terminal, dc_calls_per_year: v })}
+                    hasOps={terminal.berths.some((b) => b.ops_existing) || (terminal.berth_scenarios?.some((s) => s.ops_enabled) ?? false)}
+                    hasDc={terminal.berths.some((b) => b.dc_existing) || (terminal.berth_scenarios?.some((s) => s.dc_enabled) ?? false)}
+                    readOnly
+                  />
+                </CollapsibleSection>
+              )}
 
               {/* Onshore Equipment Changes — container terminals only */}
               {terminal.terminal_type === 'container' && (
@@ -405,12 +472,8 @@ export default function PieceTerminalCard({
                   <ChargerPanel
                     scenarioEquipment={scenarioElectricEquipment}
                     chargerOverrides={terminal.charger_overrides}
-                    chargerOwnership={terminal.charger_ownership}
                     onChange={(overrides) =>
                       onChange({ ...terminal, charger_overrides: overrides })
-                    }
-                    onOwnershipChange={(ownership) =>
-                      onChange({ ...terminal, charger_ownership: ownership })
                     }
                   />
                 </CollapsibleSection>

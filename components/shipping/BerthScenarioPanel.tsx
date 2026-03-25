@@ -1,6 +1,6 @@
 'use client'
 
-import type { BerthDefinition, BerthScenarioConfig, TerminalType, OwnershipType } from '@/lib/types'
+import type { BerthDefinition, BerthScenarioConfig, TerminalType } from '@/lib/types'
 
 type Props = {
   berths: BerthDefinition[]
@@ -60,11 +60,6 @@ export default function BerthScenarioPanel({ berths, scenarios, onChange, onBert
     } else {
       onChange([...scenarios, { berth_id: berthId, ops_enabled: false, dc_enabled: false, ...updates }])
     }
-  }
-
-  function updateBerthOwnership(berthId: string, field: 'ops_ownership' | 'dc_ownership', value: OwnershipType) {
-    if (!onBerthChange) return
-    onBerthChange(berths.map((b) => b.id === berthId ? { ...b, [field]: value } : b))
   }
 
   // Calculate totals
@@ -157,10 +152,6 @@ export default function BerthScenarioPanel({ berths, scenarios, onChange, onBert
                 DC
               </th>
               <th className="text-center py-3 px-3 text-[11px] font-bold uppercase text-[#666] w-14">Status</th>
-              <th className="text-center py-3 px-3 text-[10px] font-bold uppercase bg-[#f0eef5] text-[#7c6fb0] w-28">
-                Owner
-                <span className="block text-[9px] font-normal text-[#9b91c0]">(OPS / DC)</span>
-              </th>
             </tr>
           </thead>
           <tbody>
@@ -255,39 +246,6 @@ export default function BerthScenarioPanel({ berths, scenarios, onChange, onBert
                     )}
                   </td>
 
-                  {/* Ownership (OPS / DC) */}
-                  <td className="py-2 px-2 text-center bg-[#faf9fc]">
-                    <div className="flex items-center justify-center gap-1.5">
-                      {hasOps ? (
-                        <select
-                          value={berth.ops_ownership ?? 'port'}
-                          onChange={(e) => updateBerthOwnership(berth.id, 'ops_ownership', e.target.value as OwnershipType)}
-                          className="w-16 px-1.5 py-1 rounded border border-[#d5d2e0] text-[11px] text-[#555] bg-[#f8f6fb] hover:border-[#8b82b0] focus:border-[#8b82b0] focus:outline-none cursor-pointer"
-                          title="OPS ownership"
-                        >
-                          <option value="port">Port</option>
-                          <option value="third_party">3rd P.</option>
-                        </select>
-                      ) : (
-                        <span className="w-16 text-center text-[11px] text-[#d5d2e0]">—</span>
-                      )}
-                      <span className="text-[#d5d2e0] text-[9px] font-medium">/</span>
-                      {berth.dc_existing || scenario.dc_enabled ? (
-                        <select
-                          value={berth.dc_ownership ?? 'port'}
-                          onChange={(e) => updateBerthOwnership(berth.id, 'dc_ownership', e.target.value as OwnershipType)}
-                          className="w-16 px-1.5 py-1 rounded border border-[#d5d2e0] text-[11px] text-[#555] bg-[#f8f6fb] hover:border-[#8b82b0] focus:border-[#8b82b0] focus:outline-none cursor-pointer"
-                          title="DC ownership"
-                        >
-                          <option value="port">Port</option>
-                          <option value="third_party">3rd P.</option>
-                        </select>
-                      ) : (
-                        <span className="w-16 text-center text-[11px] text-[#d5d2e0]">—</span>
-                      )}
-                    </div>
-                  </td>
-
                 </tr>
               )
             })}
@@ -319,7 +277,6 @@ export default function BerthScenarioPanel({ berths, scenarios, onChange, onBert
                 {dcExistingCount > 0 && dcNewCount > 0 && ' + '}
                 {dcNewCount > 0 && <span className="text-[#bf360c] font-semibold">{dcNewCount} new</span>}
               </td>
-              <td className="py-3 px-3 bg-[#faf9fc]"></td>
             </tr>
           </tfoot>
         </table>
